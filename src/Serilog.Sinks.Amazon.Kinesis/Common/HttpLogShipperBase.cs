@@ -2,35 +2,40 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading;
+using Primitives;
+using Serilog.Sinks.Amazon.Kinesis.Common;
 using Serilog.Sinks.Amazon.Kinesis.Logging;
 
 namespace Serilog.Sinks.Amazon.Kinesis
 {
-    internal abstract class HttpLogShipperBase<TRecord, TResponse> : IDisposable
+    abstract class HttpLogShipperBase<TRecord, TResponse> : IDisposable
     {
         const long ERROR_SHARING_VIOLATION = 0x20;
         const long ERROR_LOCK_VIOLATION = 0x21;
 
-        ILog _logger;
-        protected ILog Logger => _logger ?? (_logger = LogProvider.GetLogger(GetType()));
+        private readonly ILog _logger;
+        protected ILog Logger => _logger;
+
+        private readonly ILogReaderFactory _logReaderFactory;
 
         protected readonly int _batchPostingLimit;
         protected readonly string _bookmarkFilename;
         protected readonly string _candidateSearchPath;
         protected readonly string _logFolder;
         readonly TimeSpan _period;
-        protected readonly object _stateLock = new object();
         protected readonly string _streamName;
-        readonly Timer _timer;
+        readonly Throttle _throttle;
 
-        protected volatile bool _unloading;
-
-        protected HttpLogShipperBase(KinesisSinkStateBase state)
+        protected HttpLogShipperBase(
+            KinesisSinkStateBase state,
+            ILogReaderFactory logReaderFactory)
         {
+            _logger = LogProvider.GetLogger(GetType());
+
+            _logReaderFactory = logReaderFactory;
+
             _period = state.SinkOptions.Period;
-            _timer = new Timer(s => OnTick());
+            _throttle = new Throttle(OnTick, _period);
             _batchPostingLimit = state.SinkOptions.BatchPostingLimit;
             _streamName = state.SinkOptions.StreamName;
             _bookmarkFilename = Path.GetFullPath(state.SinkOptions.BufferBaseFilename + ".bookmark");
@@ -39,11 +44,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
             Logger.InfoFormat("Candidate search path is {0}", _candidateSearchPath);
             Logger.InfoFormat("Log folder is {0}", _logFolder);
+        }
 
-            AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;
-
-            SetTimer();
+        public void Emit()
+        {
+            _throttle.ThrottleAction();
         }
 
         /// <summary>
@@ -55,15 +60,10 @@ namespace Serilog.Sinks.Amazon.Kinesis
             Dispose(true);
         }
 
-        protected abstract TRecord PrepareRecord(byte[] bytes);
+        protected abstract TRecord PrepareRecord(MemoryStream stream);
         protected abstract TResponse SendRecords(List<TRecord> records, out bool successful);
         protected abstract void HandleError(TResponse response, int originalRecordCount);
         public event EventHandler<LogSendErrorEventArgs> LogSendError;
-
-        void OnAppDomainUnloading(object sender, EventArgs e)
-        {
-            CloseAndFlush();
-        }
 
         protected void OnLogSendError(LogSendErrorEventArgs e)
         {
@@ -72,26 +72,6 @@ namespace Serilog.Sinks.Amazon.Kinesis
             {
                 handler(this, e);
             }
-        }
-
-        void CloseAndFlush()
-        {
-            lock (_stateLock)
-            {
-                if (_unloading)
-                    return;
-
-                _unloading = true;
-            }
-
-            AppDomain.CurrentDomain.DomainUnload -= OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;
-
-            var wh = new ManualResetEvent(false);
-            if (_timer.Dispose(wh))
-                wh.WaitOne();
-
-            OnTick();
         }
 
         /// <summary>
@@ -104,39 +84,24 @@ namespace Serilog.Sinks.Amazon.Kinesis
         protected virtual void Dispose(bool disposing)
         {
             if (!disposing) return;
-            CloseAndFlush();
+            _throttle.Dispose();
         }
 
-        protected void SetTimer()
-        {
-            // Note, called under _stateLock
 
-#if NET40
-           _timer.Change(_period, TimeSpan.FromDays(30));
-#else
-            _timer.Change(_period, Timeout.InfiniteTimeSpan);
-#endif
-        }
-
-        void OnTick()
+        private void OnTick()
         {
             try
             {
-                int count;
+                // Locking the bookmark ensures that though there may be multiple instances of this
+                // class running, only one will ship logs at a time.
 
-                do
+                using (var bookmark = PersistedBookmark.Create(_bookmarkFilename))
                 {
-                    count = 0;
-
-                    // Locking the bookmark ensures that though there may be multiple instances of this
-                    // class running, only one will ship logs at a time.
-
-                    using (var bookmark = File.Open(_bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
+                    do
                     {
-                        long nextLineBeginsAtOffset;
-                        string currentFilePath;
+                        long nextLineBeginsAtOffset = bookmark.Position;
+                        string currentFilePath = bookmark.FileName;
 
-                        TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
                         Logger.TraceFormat("Bookmark is currently at offset {0} in '{1}'", nextLineBeginsAtOffset, currentFilePath);
 
                         var fileSet = GetFileSet();
@@ -145,42 +110,52 @@ namespace Serilog.Sinks.Amazon.Kinesis
                         {
                             nextLineBeginsAtOffset = 0;
                             currentFilePath = fileSet.FirstOrDefault();
-                            Logger.InfoFormat("Current log file is {0}", currentFilePath);
+                            Logger.InfoFormat("New log file is {0}", currentFilePath);
 
-                            if (currentFilePath == null) continue;
-                        }
+                            bookmark.UpdateFileNameAndPosition(currentFilePath, nextLineBeginsAtOffset);
 
-                        var records = new List<TRecord>();
-                        long startingOffset;
-                        using (var current = File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                        {
-                            startingOffset = current.Position = nextLineBeginsAtOffset;
-
-                            string nextLine;
-                            while (count < _batchPostingLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                            if (currentFilePath == null)
                             {
-                                ++count;
-                                var bytes = Encoding.UTF8.GetBytes(nextLine);
-                                var record = PrepareRecord(bytes);
-                                records.Add(record);
+                                Logger.InfoFormat("No log file is found. Nothing to do.");
+                                break;
                             }
                         }
 
-                        if (count > 0)
+                        // delete all previous files - we will not read them anyway
+                        foreach (var fileToDelete in fileSet.TakeWhile(f => !FileNamesEqual(f, currentFilePath)))
                         {
-                            bool successful;
-                            var response = SendRecords(records, out successful);
+                            TryLockAndDeleteFile(fileToDelete);
+                        }
 
-                            if (!successful)
+                        // now we are interested in current file and all after it.
+                        fileSet =
+                            fileSet.SkipWhile(f => !FileNamesEqual(f, currentFilePath))
+                                .ToArray();
+
+                        var initialPosition = nextLineBeginsAtOffset;
+                        List<TRecord> records;
+                        do
+                        {
+                            var batch = ReadRecordBatch(currentFilePath, initialPosition, _batchPostingLimit);
+                            records = batch.Item2;
+                            if (records.Count > 0)
                             {
-                                HandleError(response, records.Count);
+                                bool successful;
+                                var response = SendRecords(records, out successful);
+
+                                if (!successful)
+                                {
+                                    HandleError(response, records.Count);
+                                    break;
+                                }
                             }
-                            else
-                            {
-                                // Advance the bookmark only if we successfully wrote
-                                Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", startingOffset, nextLineBeginsAtOffset);
-                                WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
-                            }
+                            nextLineBeginsAtOffset = batch.Item1;
+                        } while (records.Count >= _batchPostingLimit);
+
+                        if (initialPosition < nextLineBeginsAtOffset)
+                        {
+                            Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", initialPosition, nextLineBeginsAtOffset);
+                            bookmark.UpdatePosition(nextLineBeginsAtOffset);
                         }
                         else
                         {
@@ -189,32 +164,24 @@ namespace Serilog.Sinks.Amazon.Kinesis
                             // Only advance the bookmark if no other process has the
                             // current file locked, and its length is as we found it.
 
-                            var bufferedFilesCount = fileSet.Length;
-                            var isProcessingFirstFile = fileSet.First().Equals(currentFilePath, StringComparison.InvariantCultureIgnoreCase);
-
-                            if (bufferedFilesCount == 2 && isProcessingFirstFile)
+                            if (fileSet.Length > 1)
                             {
-                              Logger.TraceFormat("BufferedFilesCount: {0}; AreProcessingFirstFile: true", bufferedFilesCount);
-                              var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, nextLineBeginsAtOffset);
-                              if (weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread)
-                              {
-                                Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);
-                                WriteBookmark(bookmark, 0, fileSet[1]);                                
-                              }
+                                Logger.TraceFormat("BufferedFilesCount: {0}; checking if can advance to the next file", fileSet.Length);
+                                var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, nextLineBeginsAtOffset);
+                                if (weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread)
+                                {
+                                    Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);
+                                    bookmark.UpdateFileNameAndPosition(fileSet[1], 0);
+                                }
                             }
-
-                            if (bufferedFilesCount > 2)
+                            else
                             {
-                                // Once there's a third file waiting to ship, we do our
-                                // best to move on, though a lock on the current file
-                                // will delay this.
-                                Logger.InfoFormat("Deleting '{0}'", fileSet[0]);
-
-                                File.Delete(fileSet[0]);
+                                Logger.TraceFormat("This is a single log file, and we are in the end of it. Nothing to do.");
+                                break;
                             }
                         }
-                    }
-                } while (count == _batchPostingLimit);
+                    } while (true);
+                }
             }
             catch (IOException ex)
             {
@@ -234,13 +201,45 @@ namespace Serilog.Sinks.Amazon.Kinesis
                 Logger.ErrorException("Exception while emitting periodic batch", ex);
                 OnLogSendError(new LogSendErrorEventArgs(string.Format("Error in shipping logs to '{0}' stream)", _streamName), ex));
             }
-            finally
+        }
+
+        private Tuple<long, List<TRecord>> ReadRecordBatch(string currentFilePath, long initialPosition, int maxRecords)
+        {
+            var records = new List<TRecord>(maxRecords);
+            long positionSent;
+            using (var reader = _logReaderFactory.Create(currentFilePath, initialPosition))
             {
-                lock (_stateLock)
+                do
                 {
-                    if (!_unloading)
-                        SetTimer();
+                    var stream = reader.ReadLine();
+                    if (stream.Length == 0)
+                    {
+                        break;
+                    }
+                    records.Add(PrepareRecord(stream));
+                } while (records.Count < maxRecords);
+
+                positionSent = reader.Position;
+            }
+
+            return Tuple.Create(positionSent, records);
+        }
+
+        private bool TryLockAndDeleteFile(string fileToDelete)
+        {
+            try
+            {
+                using (var stream = new FileStream(fileToDelete, FileMode.Open, FileAccess.ReadWrite,
+                    FileShare.None, 128, FileOptions.DeleteOnClose))
+                {
+                    Logger.InfoFormat("Opened {0} in exclusive mode, deleting...", fileToDelete);
                 }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.WarnException("Exception opening {0} in exclusive mode", ex, fileToDelete);
+                return false;
             }
         }
 
@@ -254,11 +253,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
             return win32ErrorCode;
         }
 
-        protected bool WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(string file, long nextLineBeginsAtOffset)
+        private bool WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(string file, long nextLineBeginsAtOffset)
         {
             try
             {
-                using (var fileStream = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+                using (var fileStream = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 {
                     return fileStream.Length <= nextLineBeginsAtOffset;
                 }
@@ -284,84 +283,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             return false;
         }
 
-        private static readonly Encoding _bookmarkEncoding = new UTF8Encoding(false, false);
-
-        protected static void WriteBookmark(FileStream bookmark, long nextLineBeginsAtOffset, string currentFile)
-        {
-            bookmark.SetLength(0);
-            var content = string.Format("{0}:::{1}", nextLineBeginsAtOffset, currentFile);
-            var byteContent = _bookmarkEncoding.GetBytes(content);
-            bookmark.Write(byteContent, 0, byteContent.Length);
-            bookmark.Flush();
-        }
-
-        // It would be ideal to chomp whitespace here, but not required.
-        protected static bool TryReadLine(System.IO.Stream current, ref long nextStart, out string nextLine)
-        {
-            var includesBom = nextStart == 0;
-
-            if (current.Length <= nextStart)
-            {
-                nextLine = null;
-                return false;
-            }
-
-            current.Position = nextStart;
-
-#if NET40
-    // Important not to dispose this StreamReader as the stream must remain open.
-            var reader = new StreamReader(current, Encoding.UTF8, false, 128);
-            nextLine = reader.ReadLine();
-#else
-            using (var reader = new StreamReader(current, Encoding.UTF8, false, 128, true))
-            {
-                nextLine = reader.ReadLine();
-            }
-#endif
-
-            if (nextLine == null)
-                return false;
-
-            nextStart += Encoding.UTF8.GetByteCount(nextLine) + Encoding.UTF8.GetByteCount(Environment.NewLine);
-            if (includesBom)
-                nextStart += 3;
-
-            return true;
-        }
-
-        protected static void TryReadBookmark(System.IO.Stream bookmark, out long nextLineBeginsAtOffset, out string currentFile)
-        {
-            nextLineBeginsAtOffset = 0;
-            currentFile = null;
-
-            if (bookmark.Length != 0)
-            {
-                bookmark.Position = 0;
-                string current;
-#if NET40
-    // Important not to dispose this StreamReader as the stream must remain open.
-                var reader = new StreamReader(bookmark, _bookmarkEncoding, false, 128);
-                current = reader.ReadLine();
-#else
-                using (var reader = new StreamReader(bookmark, _bookmarkEncoding, false, 128, true))
-                {
-                    current = reader.ReadLine();
-                }
-#endif
-
-                if (current != null)
-                {
-                    var parts = current.Split(new[] {":::"}, StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length == 2)
-                    {
-                        nextLineBeginsAtOffset = long.Parse(parts[0]);
-                        currentFile = parts[1];
-                    }
-                }
-            }
-        }
-
-        protected string[] GetFileSet()
+        private string[] GetFileSet()
         {
             var fileSet = Directory.GetFiles(_logFolder, _candidateSearchPath)
                 .OrderBy(n => n)
@@ -369,6 +291,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
             var fileSetDesc = string.Join(";", fileSet);
             Logger.TraceFormat("FileSet contains: {0}", fileSetDesc);
             return fileSet;
+        }
+
+        private static bool FileNamesEqual(string fileName1, string fileName2)
+        {
+            return string.Equals(fileName1, fileName2, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

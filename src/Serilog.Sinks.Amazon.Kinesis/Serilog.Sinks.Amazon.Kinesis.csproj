@@ -87,6 +87,8 @@
   <ItemGroup>
     <Compile Include="App_Packages\LibLog.4.2\LibLog.cs" />
     <Compile Include="Common\CustomJsonFormatter.cs" />
+    <Compile Include="Common\LogReader.cs" />
+    <Compile Include="Common\PersistedBookmark.cs" />
     <Compile Include="Firehose\KinesisFirehoseLoggerConfigurationExtensions.cs" />
     <Compile Include="Firehose\Sinks\DurableKinesisFirehoseSink.cs" />
     <Compile Include="Firehose\Sinks\HttpLogShipper.cs" />
@@ -97,6 +99,7 @@
     <Compile Include="Common\KinesisSinkOptionsBase.cs" />
     <Compile Include="Common\KinesisSinkStateBase.cs" />
     <Compile Include="Common\LogSendErrorEventArgs.cs" />
+    <Compile Include="Primitives\Throttle.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Stream\KinesisLoggerConfigurationExtensions.cs" />
     <Compile Include="Stream\Sinks\DurableKinesisSink.cs" />

@@ -20,7 +20,7 @@ using Serilog.Sinks.RollingFile;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
 {
-    class DurableKinesisFirehoseSink : ILogEventSink, IDisposable
+    sealed class DurableKinesisFirehoseSink : ILogEventSink, IDisposable
     {
         readonly HttpLogShipper _shipper;
         readonly RollingFileSink _sink;
@@ -50,6 +50,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
         public void Emit(LogEvent logEvent)
         {
             _sink.Emit(logEvent);
+            _shipper.Emit();
         }
 
         public void Dispose()

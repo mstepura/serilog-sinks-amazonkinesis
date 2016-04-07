@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using Amazon.Kinesis;
 using Amazon.Kinesis.Model;
+using Serilog.Sinks.Amazon.Kinesis.Common;
 using Serilog.Sinks.Amazon.Kinesis.Logging;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
@@ -25,17 +26,17 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
     {
         readonly IAmazonKinesis _kinesisClient;
 
-        public HttpLogShipper(KinesisSinkState state) : base(state)
+        public HttpLogShipper(KinesisSinkState state) : base(state, new LogReaderFactory())
         {
             _kinesisClient = state.KinesisClient;
         }
 
-        protected override PutRecordsRequestEntry PrepareRecord(byte[] bytes)
+        protected override PutRecordsRequestEntry PrepareRecord(MemoryStream stream)
         {
             return new PutRecordsRequestEntry
             {
                 PartitionKey = Guid.NewGuid().ToString(),
-                Data = new MemoryStream(bytes)
+                Data = stream
             };
         }
 

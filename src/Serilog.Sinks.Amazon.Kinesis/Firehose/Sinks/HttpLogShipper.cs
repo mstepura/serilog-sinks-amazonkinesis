@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.IO;
 using Amazon.KinesisFirehose;
 using Amazon.KinesisFirehose.Model;
+using Serilog.Sinks.Amazon.Kinesis.Common;
 using Serilog.Sinks.Amazon.Kinesis.Logging;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
@@ -24,16 +25,16 @@ namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
     {
         readonly IAmazonKinesisFirehose _kinesisFirehoseClient;
 
-        public HttpLogShipper(KinesisSinkState state) : base(state)
+        public HttpLogShipper(KinesisSinkState state) : base(state, new LogReaderFactory())
         {
             _kinesisFirehoseClient = state.KinesisFirehoseClient;
         }
 
-        protected override Record PrepareRecord(byte[] bytes)
+        protected override Record PrepareRecord(MemoryStream stream)
         {
             return new Record
             {
-                Data = new MemoryStream(bytes)
+                Data = stream
             };
         }
 
