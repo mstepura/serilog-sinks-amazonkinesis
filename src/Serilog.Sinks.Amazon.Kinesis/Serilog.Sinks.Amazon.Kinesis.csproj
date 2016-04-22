@@ -87,7 +87,10 @@
   <ItemGroup>
     <Compile Include="App_Packages\LibLog.4.2\LibLog.cs" />
     <Compile Include="Common\CustomJsonFormatter.cs" />
+    <Compile Include="Common\ILogReader.cs" />
+    <Compile Include="Common\ILogReaderFactory.cs" />
     <Compile Include="Common\LogReader.cs" />
+    <Compile Include="Common\LogReaderFactory.cs" />
     <Compile Include="Common\PersistedBookmark.cs" />
     <Compile Include="Firehose\KinesisFirehoseLoggerConfigurationExtensions.cs" />
     <Compile Include="Firehose\Sinks\DurableKinesisFirehoseSink.cs" />

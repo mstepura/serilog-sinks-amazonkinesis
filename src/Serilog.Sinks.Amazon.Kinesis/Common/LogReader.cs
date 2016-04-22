@@ -1,37 +1,9 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Common
 {
-    public interface ILogReader : IDisposable
-    {
-        /// <summary>
-        /// Read next line until CR or LF character.
-        /// Ignoring leading CR/LF (no empty lines returned),
-        /// </summary>
-        /// <returns>Stream with line content, or empty stream in case of EOF</returns>
-        System.IO.MemoryStream ReadLine();
-        long Position { get; }
-    }
-
-    public interface ILogReaderFactory
-    {
-        ILogReader Create(string fileName, long position);
-    }
-
-    class LogReaderFactory : ILogReaderFactory
-    {
-        public ILogReader Create(string fileName, long position)
-        {
-            var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 128, FileOptions.SequentialScan);
-            stream.Seek(position, SeekOrigin.Begin);
-            return new LogReader(stream);
-        }
-    }
-
-
     sealed class LogReader : ILogReader
     {
         private readonly System.IO.Stream _logStream;

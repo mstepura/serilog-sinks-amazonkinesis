@@ -3,12 +3,12 @@ using Serilog.Formatting;
 
 namespace Serilog.Sinks.Amazon.Kinesis
 {
-    public class KinesisSinkStateBase
+    abstract class KinesisSinkStateBase
     {
         private readonly KinesisSinkOptionsBase _options;
         private readonly ITextFormatter _formatter;
         private readonly ITextFormatter _durableFormatter;
-        public KinesisSinkStateBase(KinesisSinkOptionsBase options)
+        protected KinesisSinkStateBase(KinesisSinkOptionsBase options)
         {
             if (options == null) throw new ArgumentNullException("options");
             _options = options;
