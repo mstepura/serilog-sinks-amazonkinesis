@@ -82,7 +82,7 @@ namespace Primitives
         {
             if (Interlocked.CompareExchange(ref _throttling, THROTTLING_BUSY, THROTTLING_FREE) == THROTTLING_FREE)
             {
-                return _timer.Change(_throttlingTime, Timeout.InfiniteTimeSpan);
+                return _timer.Change(_throttlingTime, new TimeSpan(0, 0, 0, 0, Timeout.Infinite));
             }
             return false;
         }
