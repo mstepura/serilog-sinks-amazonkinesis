@@ -154,15 +154,21 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
                         if (initialPosition < nextLineBeginsAtOffset)
                         {
-                            Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", initialPosition, nextLineBeginsAtOffset);
+                            Logger.TraceFormat("Advancing bookmark from {0} to {1} on {2}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
+                            bookmark.UpdatePosition(nextLineBeginsAtOffset);
+                        }
+                        else if (initialPosition > nextLineBeginsAtOffset)
+                        {
+                            nextLineBeginsAtOffset = 0;
+                            Logger.WarnFormat("File {2} has been truncated or re-created, bookmark reset from {0} to {1}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
                             bookmark.UpdatePosition(nextLineBeginsAtOffset);
                         }
                         else
                         {
                             Logger.TraceFormat("Found no records to process");
 
-                            // Only advance the bookmark if no other process has the
-                            // current file locked, and its length is as we found it.
+                            // Only advance the bookmark if there is next file in the queue 
+                            // and no other process has the current file locked, and its length is as we found it.
 
                             if (fileSet.Length > 1)
                             {
