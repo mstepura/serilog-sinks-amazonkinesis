@@ -105,9 +105,7 @@
     <Message Text="Exiting After Build TargetFrameworkVersion:$(TargetFrameworkVersion) Framework:$(Framework)" Importance="high" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>if not exist "$(TargetDir)ilmerged" mkdir "$(TargetDir)ilmerged"
-"$(SolutionDir)packages\ILMerge.2.14.1208\tools\ILMerge.exe" /out:"$(TargetDir)ilmerged\$(TargetFileName)" "$(TargetPath)" "$(TargetDir)AWSSDK*.dll" /target:library /targetplatform:v4 /wildcards /internalize
-copy "$(TargetDir)$(TargetName).xml" "$(TargetDir)ilmerged\$(TargetName).xml"
-</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>
