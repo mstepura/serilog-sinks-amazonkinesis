@@ -109,107 +109,112 @@ namespace Serilog.Sinks.Amazon.Kinesis
                     if (bookmark == null)
                         return;
 
-                    do
-                    {
-                        long nextLineBeginsAtOffset = bookmark.Position;
-                        string currentFilePath = bookmark.FileName;
-
-                        Logger.TraceFormat("Bookmark is currently at offset {0} in '{1}'", nextLineBeginsAtOffset, currentFilePath);
-
-                        var fileSet = GetFileSet();
-
-                        if (currentFilePath == null || !File.Exists(currentFilePath))
-                        {
-                            nextLineBeginsAtOffset = 0;
-                            currentFilePath = fileSet.FirstOrDefault();
-                            Logger.InfoFormat("New log file is {0}", currentFilePath);
-
-                            bookmark.UpdateFileNameAndPosition(currentFilePath, nextLineBeginsAtOffset);
-
-                            if (currentFilePath == null)
-                            {
-                                Logger.InfoFormat("No log file is found. Nothing to do.");
-                                break;
-                            }
-                        }
-
-                        // delete all previous files - we will not read them anyway
-                        foreach (var fileToDelete in fileSet.TakeWhile(f => !FileNamesEqual(f, currentFilePath)))
-                        {
-                            TryLockAndDeleteFile(fileToDelete);
-                        }
-
-                        // now we are interested in current file and all after it.
-                        fileSet =
-                            fileSet.SkipWhile(f => !FileNamesEqual(f, currentFilePath))
-                                .ToArray();
-
-                        var initialPosition = nextLineBeginsAtOffset;
-                        List<TRecord> records;
-                        do
-                        {
-                            var batch = ReadRecordBatch(currentFilePath, nextLineBeginsAtOffset, _batchPostingLimit);
-                            records = batch.Item2;
-                            if (records.Count > 0)
-                            {
-                                bool successful;
-                                var response = SendRecords(records, out successful);
-
-                                if (!successful)
-                                {
-                                    HandleError(response, records.Count);
-                                    break;
-                                }
-                            }
-                            nextLineBeginsAtOffset = batch.Item1;
-                        } while (records.Count >= _batchPostingLimit);
-
-                        if (initialPosition < nextLineBeginsAtOffset)
-                        {
-                            Logger.TraceFormat("Advancing bookmark from {0} to {1} on {2}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
-                            bookmark.UpdatePosition(nextLineBeginsAtOffset);
-                        }
-                        else if (initialPosition > nextLineBeginsAtOffset)
-                        {
-                            nextLineBeginsAtOffset = 0;
-                            Logger.WarnFormat("File {2} has been truncated or re-created, bookmark reset from {0} to {1}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
-                            bookmark.UpdatePosition(nextLineBeginsAtOffset);
-                        }
-                        else
-                        {
-                            Logger.TraceFormat("Found no records to process");
-
-                            // Only advance the bookmark if there is next file in the queue 
-                            // and no other process has the current file locked, and its length is as we found it.
-
-                            if (fileSet.Length > 1)
-                            {
-                                Logger.TraceFormat("BufferedFilesCount: {0}; checking if can advance to the next file", fileSet.Length);
-                                var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, nextLineBeginsAtOffset);
-                                if (weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread)
-                                {
-                                    Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);
-                                    bookmark.UpdateFileNameAndPosition(fileSet[1], 0);
-                                }
-                            }
-                            else
-                            {
-                                Logger.TraceFormat("This is a single log file, and we are in the end of it. Nothing to do.");
-                                break;
-                            }
-                        }
-                    } while (true);
+                    ShipLogs(bookmark);
                 }
             }
             catch (IOException ex)
             {
-                Logger.TraceException("Swallowed I/O exception", ex);
+                Logger.WarnException("Error shipping logs", ex);
             }
             catch (Exception ex)
             {
-                Logger.ErrorException("Exception while emitting periodic batch", ex);
+                Logger.ErrorException("Error shipping logs", ex);
                 OnLogSendError(new LogSendErrorEventArgs(string.Format("Error in shipping logs to '{0}' stream)", _streamName), ex));
             }
+        }
+
+        private void ShipLogs(PersistedBookmark bookmark)
+        {
+            do
+            {
+                long nextLineBeginsAtOffset = bookmark.Position;
+                string currentFilePath = bookmark.FileName;
+
+                Logger.TraceFormat("Bookmark is currently at offset {0} in '{1}'", nextLineBeginsAtOffset, currentFilePath);
+
+                var fileSet = GetFileSet();
+
+                if (currentFilePath == null || !File.Exists(currentFilePath))
+                {
+                    nextLineBeginsAtOffset = 0;
+                    currentFilePath = fileSet.FirstOrDefault();
+                    Logger.InfoFormat("New log file is {0}", currentFilePath);
+
+                    bookmark.UpdateFileNameAndPosition(currentFilePath, nextLineBeginsAtOffset);
+
+                    if (currentFilePath == null)
+                    {
+                        Logger.InfoFormat("No log file is found. Nothing to do.");
+                        break;
+                    }
+                }
+
+                // delete all previous files - we will not read them anyway
+                foreach (var fileToDelete in fileSet.TakeWhile(f => !FileNamesEqual(f, currentFilePath)))
+                {
+                    TryLockAndDeleteFile(fileToDelete);
+                }
+
+                // now we are interested in current file and all after it.
+                fileSet =
+                    fileSet.SkipWhile(f => !FileNamesEqual(f, currentFilePath))
+                        .ToArray();
+
+                var initialPosition = nextLineBeginsAtOffset;
+                List<TRecord> records;
+                do
+                {
+                    var batch = ReadRecordBatch(currentFilePath, nextLineBeginsAtOffset, _batchPostingLimit);
+                    records = batch.Item2;
+                    if (records.Count > 0)
+                    {
+                        bool successful;
+                        var response = SendRecords(records, out successful);
+
+                        if (!successful)
+                        {
+                            HandleError(response, records.Count);
+                            break;
+                        }
+                    }
+                    nextLineBeginsAtOffset = batch.Item1;
+                } while (records.Count >= _batchPostingLimit);
+
+                if (initialPosition < nextLineBeginsAtOffset)
+                {
+                    Logger.TraceFormat("Advancing bookmark from {0} to {1} on {2}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
+                    bookmark.UpdatePosition(nextLineBeginsAtOffset);
+                }
+                else if (initialPosition > nextLineBeginsAtOffset)
+                {
+                    nextLineBeginsAtOffset = 0;
+                    Logger.WarnFormat("File {2} has been truncated or re-created, bookmark reset from {0} to {1}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
+                    bookmark.UpdatePosition(nextLineBeginsAtOffset);
+                }
+                else
+                {
+                    Logger.TraceFormat("Found no records to process");
+
+                    // Only advance the bookmark if there is next file in the queue 
+                    // and no other process has the current file locked, and its length is as we found it.
+
+                    if (fileSet.Length > 1)
+                    {
+                        Logger.TraceFormat("BufferedFilesCount: {0}; checking if can advance to the next file", fileSet.Length);
+                        var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, nextLineBeginsAtOffset);
+                        if (weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread)
+                        {
+                            Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);
+                            bookmark.UpdateFileNameAndPosition(fileSet[1], 0);
+                        }
+                    }
+                    else
+                    {
+                        Logger.TraceFormat("This is a single log file, and we are in the end of it. Nothing to do.");
+                        break;
+                    }
+                }
+            } while (true);
         }
 
         private Tuple<long, List<TRecord>> ReadRecordBatch(string currentFilePath, long position, int maxRecords)
