@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Serilog.Sinks.Amazon.Kinesis
 {
-    public class PersistedBookmark : IDisposable
+    class PersistedBookmark : IDisposable
     {
         private static readonly Encoding _bookmarkEncoding = new UTF8Encoding(false, false);
         private readonly System.IO.Stream _bookmarkStream;
