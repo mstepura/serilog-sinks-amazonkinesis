@@ -10,9 +10,6 @@ namespace Serilog.Sinks.Amazon.Kinesis
 {
     abstract class HttpLogShipperBase<TRecord, TResponse> : IDisposable
     {
-        const long ERROR_SHARING_VIOLATION = 0x20;
-        const long ERROR_LOCK_VIOLATION = 0x21;
-
         private readonly ILog _logger;
         protected ILog Logger => _logger;
 
@@ -87,6 +84,18 @@ namespace Serilog.Sinks.Amazon.Kinesis
             _throttle.Dispose();
         }
 
+        private PersistedBookmark TryCreateBookmark()
+        {
+            try
+            {
+                return PersistedBookmark.Create(_bookmarkFilename);
+            }
+            catch (IOException ex)
+            {
+                Logger.TraceException("Bookmark cannot be opened.", ex);
+                return null;
+            }
+        }
 
         private void OnTick()
         {
@@ -95,8 +104,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
                 // Locking the bookmark ensures that though there may be multiple instances of this
                 // class running, only one will ship logs at a time.
 
-                using (var bookmark = PersistedBookmark.Create(_bookmarkFilename))
+                using (var bookmark = TryCreateBookmark())
                 {
+                    if (bookmark == null)
+                        return;
+
                     do
                     {
                         long nextLineBeginsAtOffset = bookmark.Position;
@@ -191,16 +203,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
             catch (IOException ex)
             {
-                long win32ErrorCode = GetWin32ErrorCode(ex);
-
-                if (win32ErrorCode == ERROR_SHARING_VIOLATION || win32ErrorCode == ERROR_LOCK_VIOLATION)
-                {
-                    Logger.TraceException("Swallowed I/O exception", ex);
-                }
-                else
-                {
-                    Logger.ErrorException("Unexpected I/O exception", ex);
-                }
+                Logger.TraceException("Swallowed I/O exception", ex);
             }
             catch (Exception ex)
             {
@@ -209,11 +212,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        private Tuple<long, List<TRecord>> ReadRecordBatch(string currentFilePath, long initialPosition, int maxRecords)
+        private Tuple<long, List<TRecord>> ReadRecordBatch(string currentFilePath, long position, int maxRecords)
         {
             var records = new List<TRecord>(maxRecords);
             long positionSent;
-            using (var reader = _logReaderFactory.Create(currentFilePath, initialPosition))
+            using (var reader = _logReaderFactory.Create(currentFilePath, position))
             {
                 do
                 {
@@ -249,16 +252,6 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        private long GetWin32ErrorCode(IOException ex)
-        {
-#if NET40
-            long win32ErrorCode = System.Runtime.InteropServices.Marshal.GetHRForException(ex) & 0xFFFF;
-#else
-            long win32ErrorCode = ex.HResult & 0xFFFF;
-#endif
-            return win32ErrorCode;
-        }
-
         private bool WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(string file, long nextLineBeginsAtOffset)
         {
             try
@@ -270,16 +263,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
             catch (IOException ex)
             {
-                long win32ErrorCode = GetWin32ErrorCode(ex);
-
-                if (win32ErrorCode == ERROR_SHARING_VIOLATION || win32ErrorCode == ERROR_LOCK_VIOLATION)
-                {
-                    Logger.TraceException("Swallowed I/O exception while testing locked status of {0}", ex, file);
-                }
-                else
-                {
-                    Logger.ErrorException("Unexpected I/O exception while testing locked status of {0}", ex, file);
-                }
+                Logger.TraceException("Swallowed I/O exception while testing locked status of {0}", ex, file);
             }
             catch (Exception ex)
             {
