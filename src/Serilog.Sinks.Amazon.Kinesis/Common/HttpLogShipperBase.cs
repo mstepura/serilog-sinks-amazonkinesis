@@ -136,7 +136,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
                         List<TRecord> records;
                         do
                         {
-                            var batch = ReadRecordBatch(currentFilePath, initialPosition, _batchPostingLimit);
+                            var batch = ReadRecordBatch(currentFilePath, nextLineBeginsAtOffset, _batchPostingLimit);
                             records = batch.Item2;
                             if (records.Count > 0)
                             {
