@@ -26,7 +26,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
     {
         readonly IAmazonKinesis _kinesisClient;
 
-        public HttpLogShipper(KinesisSinkState state) : base(state, new LogReaderFactory())
+        public HttpLogShipper(KinesisSinkState state) : base(state,
+            new LogReaderFactory(),
+            new PersistedBookmarkFactory()
+            )
         {
             _kinesisClient = state.KinesisClient;
         }

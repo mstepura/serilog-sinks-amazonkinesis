@@ -25,7 +25,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
     {
         readonly IAmazonKinesisFirehose _kinesisFirehoseClient;
 
-        public HttpLogShipper(KinesisSinkState state) : base(state, new LogReaderFactory())
+        public HttpLogShipper(KinesisSinkState state) : base(state,
+            new LogReaderFactory(),
+            new PersistedBookmarkFactory()
+            )
         {
             _kinesisFirehoseClient = state.KinesisFirehoseClient;
         }

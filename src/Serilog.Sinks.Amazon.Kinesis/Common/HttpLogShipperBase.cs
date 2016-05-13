@@ -14,6 +14,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
         protected ILog Logger => _logger;
 
         private readonly ILogReaderFactory _logReaderFactory;
+        private readonly IPersistedBookmarkFactory _persistedBookmarkFactory;
 
         protected readonly int _batchPostingLimit;
         protected readonly string _bookmarkFilename;
@@ -25,11 +26,14 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
         protected HttpLogShipperBase(
             KinesisSinkStateBase state,
-            ILogReaderFactory logReaderFactory)
+            ILogReaderFactory logReaderFactory,
+            IPersistedBookmarkFactory persistedBookmarkFactory
+            )
         {
             _logger = LogProvider.GetLogger(GetType());
 
             _logReaderFactory = logReaderFactory;
+            _persistedBookmarkFactory = persistedBookmarkFactory;
 
             _period = state.SinkOptions.Period;
             _throttle = new Throttle(OnTick, _period);
@@ -84,11 +88,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
             _throttle.Dispose();
         }
 
-        private PersistedBookmark TryCreateBookmark()
+        private IPersistedBookmark TryCreateBookmark()
         {
             try
             {
-                return PersistedBookmark.Create(_bookmarkFilename);
+                return _persistedBookmarkFactory.Create(_bookmarkFilename);
             }
             catch (IOException ex)
             {
@@ -123,24 +127,22 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        private void ShipLogs(PersistedBookmark bookmark)
+        private void ShipLogs(IPersistedBookmark bookmark)
         {
             do
             {
-                long nextLineBeginsAtOffset = bookmark.Position;
                 string currentFilePath = bookmark.FileName;
 
-                Logger.TraceFormat("Bookmark is currently at offset {0} in '{1}'", nextLineBeginsAtOffset, currentFilePath);
+                Logger.TraceFormat("Bookmark is currently at offset {0} in '{1}'", bookmark.Position, currentFilePath);
 
                 var fileSet = GetFileSet();
 
                 if (currentFilePath == null || !File.Exists(currentFilePath))
                 {
-                    nextLineBeginsAtOffset = 0;
                     currentFilePath = fileSet.FirstOrDefault();
                     Logger.InfoFormat("New log file is {0}", currentFilePath);
 
-                    bookmark.UpdateFileNameAndPosition(currentFilePath, nextLineBeginsAtOffset);
+                    bookmark.UpdateFileNameAndPosition(currentFilePath, 0L);
 
                     if (currentFilePath == null)
                     {
@@ -160,11 +162,11 @@ namespace Serilog.Sinks.Amazon.Kinesis
                     fileSet.SkipWhile(f => !FileNamesEqual(f, currentFilePath))
                         .ToArray();
 
-                var initialPosition = nextLineBeginsAtOffset;
+                var initialPosition = bookmark.Position;
                 List<TRecord> records;
                 do
                 {
-                    var batch = ReadRecordBatch(currentFilePath, nextLineBeginsAtOffset, _batchPostingLimit);
+                    var batch = ReadRecordBatch(currentFilePath, bookmark.Position, _batchPostingLimit);
                     records = batch.Item2;
                     if (records.Count > 0)
                     {
@@ -177,21 +179,23 @@ namespace Serilog.Sinks.Amazon.Kinesis
                             break;
                         }
                     }
-                    nextLineBeginsAtOffset = batch.Item1;
+
+                    var newPosition = batch.Item1;
+                    if (initialPosition < newPosition)
+                    {
+                        Logger.TraceFormat("Advancing bookmark from {0} to {1} on {2}", initialPosition, newPosition, currentFilePath);
+                        bookmark.UpdatePosition(newPosition);
+                    }
+                    else if (initialPosition > newPosition)
+                    {
+                        newPosition = 0;
+                        Logger.WarnFormat("File {2} has been truncated or re-created, bookmark reset from {0} to {1}", initialPosition, newPosition, currentFilePath);
+                        bookmark.UpdatePosition(newPosition);
+                    }
+
                 } while (records.Count >= _batchPostingLimit);
 
-                if (initialPosition < nextLineBeginsAtOffset)
-                {
-                    Logger.TraceFormat("Advancing bookmark from {0} to {1} on {2}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
-                    bookmark.UpdatePosition(nextLineBeginsAtOffset);
-                }
-                else if (initialPosition > nextLineBeginsAtOffset)
-                {
-                    nextLineBeginsAtOffset = 0;
-                    Logger.WarnFormat("File {2} has been truncated or re-created, bookmark reset from {0} to {1}", initialPosition, nextLineBeginsAtOffset, currentFilePath);
-                    bookmark.UpdatePosition(nextLineBeginsAtOffset);
-                }
-                else
+                if (initialPosition == bookmark.Position)
                 {
                     Logger.TraceFormat("Found no records to process");
 
@@ -201,7 +205,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
                     if (fileSet.Length > 1)
                     {
                         Logger.TraceFormat("BufferedFilesCount: {0}; checking if can advance to the next file", fileSet.Length);
-                        var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, nextLineBeginsAtOffset);
+                        var weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread = WeAreAtEndOfTheFileAndItIsNotLockedByAnotherThread(currentFilePath, bookmark.Position);
                         if (weAreAtEndOfTheFileAndItIsNotLockedByAnotherThread)
                         {
                             Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Serilog.Sinks.Amazon.Kinesis
 {
-    class PersistedBookmark : IDisposable
+    class PersistedBookmark : IPersistedBookmark
     {
         private static readonly Encoding _bookmarkEncoding = new UTF8Encoding(false, false);
         private readonly System.IO.Stream _bookmarkStream;
@@ -47,6 +47,9 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
         public void UpdatePosition(long position)
         {
+            if (string.IsNullOrEmpty(_fileName))
+                throw new InvalidOperationException("Cannot update Position when FileName is not set.");
+
             _position = position;
             Save();
         }

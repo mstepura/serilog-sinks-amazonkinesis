@@ -13,6 +13,18 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
             _logStream = logStream;
         }
 
+        public static LogReader Create(string fileName, long position)
+        {
+            var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 128, FileOptions.SequentialScan);
+            var length = stream.Length;
+            if (position > length)
+            {
+                position = length;
+            }
+            stream.Seek(position, SeekOrigin.Begin);
+            return new LogReader(stream);
+        }
+
         public System.IO.MemoryStream ReadLine()
         {
             // check and skip BOM in the beginning of file
@@ -31,17 +43,16 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
             int thisByte;
             while (0 <= (thisByte = _logStream.ReadByte()))
             {
-                if (thisByte < 0)
+                if (result.Length == 0
+                    && thisByte < 128 // main ASCII set control or whitespace
+                    && (char.IsControl((char)thisByte) || char.IsWhiteSpace((char)thisByte))
+                    )
                 {
-                    break; // EOF
+                    continue; // Ignore CR/LF and spaces in the beginning of the line
                 }
-                if (thisByte == 0x10 || thisByte == 0x13)
+                else if (thisByte == 10 || thisByte == 13)
                 {
-                    if (result.Length > 0)
-                    {
-                        break; // EOL found
-                    }
-                    continue; // Ignore CR/LF in the beginning of the line
+                    break; // EOL found
                 }
 
                 result.WriteByte((byte)thisByte);
