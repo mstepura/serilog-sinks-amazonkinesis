@@ -19,7 +19,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
 {
     internal class KinesisSinkState : KinesisSinkStateBase
     {
-        internal KinesisSinkState(KinesisStreamSinkOptions options, IAmazonKinesis kinesisClient) : base(options)
+        public KinesisSinkState(KinesisStreamSinkOptions options, IAmazonKinesis kinesisClient) : base(options)
         {
             if (kinesisClient == null) throw new ArgumentNullException("kinesisClient");
             KinesisClient = kinesisClient;
