@@ -58,6 +58,10 @@
     <Compile Include="LogReaderTests\LogReaderTestBase.cs" />
     <Compile Include="LogReaderTests\WhenLogFileExists.cs" />
     <Compile Include="LogReaderTests\WhenNoLogFileExists.cs" />
+    <Compile Include="LogShipperFileManagerTests\FileExistsTests.cs" />
+    <Compile Include="LogShipperFileManagerTests\FileTestBase.cs" />
+    <Compile Include="LogShipperFileManagerTests\GetFileLengthExclusiveAccessTests.cs" />
+    <Compile Include="LogShipperFileManagerTests\LockAndDeleteFileTests.cs" />
     <Compile Include="PersistedBookmarkTests\PersistedBookmarkTestBase.cs" />
     <Compile Include="PersistedBookmarkTests\WhenPositionIsUpdated.cs" />
     <Compile Include="PersistedBookmarkTests\WhenFileNameAndPositionAreUpdated.cs" />

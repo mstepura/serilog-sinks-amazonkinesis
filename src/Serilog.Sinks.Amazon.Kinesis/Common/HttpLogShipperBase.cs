@@ -157,7 +157,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
                 // delete all previous files - we will not read them anyway
                 foreach (var fileToDelete in fileSet.TakeWhile(f => !FileNamesEqual(f, currentFilePath)))
                 {
-                    TryLockAndDeleteFile(fileToDelete);
+                    TryDeleteFile(fileToDelete);
                 }
 
                 // now we are interested in current file and all after it.
@@ -246,7 +246,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             return Tuple.Create(positionSent, records);
         }
 
-        private bool TryLockAndDeleteFile(string fileToDelete)
+        private bool TryDeleteFile(string fileToDelete)
         {
             try
             {

@@ -11,7 +11,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
 
         public long GetFileLengthExclusiveAccess(string filePath)
         {
-            using (var fileStream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+            using (var fileStream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 return fileStream.Length;
             }
@@ -24,7 +24,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
 
         public void LockAndDeleteFile(string filePath)
         {
-            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+            using (new FileStream(filePath, FileMode.Open, FileAccess.Read,
                 FileShare.None, 128, FileOptions.DeleteOnClose))
             {
             }
