@@ -2,13 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Primitives;
 using Serilog.Sinks.Amazon.Kinesis.Common;
 using Serilog.Sinks.Amazon.Kinesis.Logging;
 
 namespace Serilog.Sinks.Amazon.Kinesis
 {
-    abstract class HttpLogShipperBase<TRecord, TResponse> : IDisposable
+    abstract class HttpLogShipperBase<TRecord, TResponse>
     {
         private readonly ILog _logger;
         protected ILog Logger => _logger;
@@ -21,18 +20,16 @@ namespace Serilog.Sinks.Amazon.Kinesis
         protected readonly string _bookmarkFilename;
         protected readonly string _candidateSearchPath;
         protected readonly string _logFolder;
-        readonly TimeSpan _period;
         protected readonly string _streamName;
-        readonly Throttle _throttle;
 
         protected HttpLogShipperBase(
-            KinesisSinkStateBase state,
+            KinesisSinkOptionsBase options,
             ILogReaderFactory logReaderFactory,
             IPersistedBookmarkFactory persistedBookmarkFactory,
             ILogShipperFileManager fileManager
             )
         {
-            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (options == null) throw new ArgumentNullException(nameof(options));
             if (logReaderFactory == null) throw new ArgumentNullException(nameof(logReaderFactory));
             if (persistedBookmarkFactory == null) throw new ArgumentNullException(nameof(persistedBookmarkFactory));
             if (fileManager == null) throw new ArgumentNullException(nameof(fileManager));
@@ -43,31 +40,16 @@ namespace Serilog.Sinks.Amazon.Kinesis
             _persistedBookmarkFactory = persistedBookmarkFactory;
             _fileManager = fileManager;
 
-            _period = state.Options.Period;
-            _throttle = new Throttle(OnTick, _period);
-            _batchPostingLimit = state.Options.BatchPostingLimit;
-            _streamName = state.Options.StreamName;
-            _bookmarkFilename = Path.GetFullPath(state.Options.BufferBaseFilename + ".bookmark");
+            _batchPostingLimit = options.BatchPostingLimit;
+            _streamName = options.StreamName;
+            _bookmarkFilename = Path.GetFullPath(options.BufferBaseFilename + ".bookmark");
             _logFolder = Path.GetDirectoryName(_bookmarkFilename);
-            _candidateSearchPath = Path.GetFileName(state.Options.BufferBaseFilename) + "*.json";
+            _candidateSearchPath = Path.GetFileName(options.BufferBaseFilename) + "*.json";
 
             Logger.InfoFormat("Candidate search path is {0}", _candidateSearchPath);
             Logger.InfoFormat("Log folder is {0}", _logFolder);
         }
 
-        public void Emit()
-        {
-            _throttle.ThrottleAction();
-        }
-
-        /// <summary>
-        ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        /// <filterpriority>2</filterpriority>
-        public void Dispose()
-        {
-            Dispose(true);
-        }
 
         protected abstract TRecord PrepareRecord(MemoryStream stream);
         protected abstract TResponse SendRecords(List<TRecord> records, out bool successful);
@@ -83,19 +65,6 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        /// <summary>
-        ///     Free resources held by the sink.
-        /// </summary>
-        /// <param name="disposing">
-        ///     If true, called because the object is being disposed; if false,
-        ///     the object is being disposed from the finalizer.
-        /// </param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposing) return;
-            _throttle.Dispose();
-        }
-
         private IPersistedBookmark TryCreateBookmark()
         {
             try
@@ -109,7 +78,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        private void OnTick()
+        protected void ShipLogs()
         {
             try
             {
