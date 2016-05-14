@@ -29,7 +29,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
         }
 
-        public KinesisSinkOptionsBase SinkOptions { get { return _options; } }
+        public KinesisSinkOptionsBase Options { get { return _options; } }
         public ITextFormatter Formatter { get { return _formatter; } }
         public ITextFormatter DurableFormatter { get { return _durableFormatter; } }
 

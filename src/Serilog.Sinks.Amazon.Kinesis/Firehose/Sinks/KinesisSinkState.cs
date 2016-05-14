@@ -21,13 +21,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
     {
         internal KinesisSinkState(KinesisFirehoseSinkOptions options, IAmazonKinesisFirehose kinesisFirehoseClient) : base(options)
         {
-            if (options == null) throw new ArgumentNullException("options");
             if (kinesisFirehoseClient == null) throw new ArgumentNullException("kinesisFirehoseClient");
             KinesisFirehoseClient = kinesisFirehoseClient;
-            Options = options;
         }
 
-        public KinesisFirehoseSinkOptions Options { get; }
         public IAmazonKinesisFirehose KinesisFirehoseClient { get; }
     }
 }
