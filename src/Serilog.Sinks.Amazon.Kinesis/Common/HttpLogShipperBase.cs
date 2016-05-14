@@ -285,10 +285,10 @@ namespace Serilog.Sinks.Amazon.Kinesis
         private string[] GetFileSet()
         {
             var fileSet = Directory.GetFiles(_logFolder, _candidateSearchPath)
-                .OrderBy(n => n)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var fileSetDesc = string.Join(";", fileSet);
-            Logger.TraceFormat("FileSet contains: {0}", fileSetDesc);
+
+            Logger.TraceFormat("FileSet contains: {0}", string.Join(";", fileSet));
             return fileSet;
         }
 
