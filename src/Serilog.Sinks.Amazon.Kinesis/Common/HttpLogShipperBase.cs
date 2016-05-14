@@ -32,19 +32,24 @@ namespace Serilog.Sinks.Amazon.Kinesis
             ILogShipperFileManager fileManager
             )
         {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (logReaderFactory == null) throw new ArgumentNullException(nameof(logReaderFactory));
+            if (persistedBookmarkFactory == null) throw new ArgumentNullException(nameof(persistedBookmarkFactory));
+            if (fileManager == null) throw new ArgumentNullException(nameof(fileManager));
+
             _logger = LogProvider.GetLogger(GetType());
 
             _logReaderFactory = logReaderFactory;
             _persistedBookmarkFactory = persistedBookmarkFactory;
             _fileManager = fileManager;
 
-            _period = state.SinkOptions.Period;
+            _period = state.Options.Period;
             _throttle = new Throttle(OnTick, _period);
-            _batchPostingLimit = state.SinkOptions.BatchPostingLimit;
-            _streamName = state.SinkOptions.StreamName;
-            _bookmarkFilename = Path.GetFullPath(state.SinkOptions.BufferBaseFilename + ".bookmark");
+            _batchPostingLimit = state.Options.BatchPostingLimit;
+            _streamName = state.Options.StreamName;
+            _bookmarkFilename = Path.GetFullPath(state.Options.BufferBaseFilename + ".bookmark");
             _logFolder = Path.GetDirectoryName(_bookmarkFilename);
-            _candidateSearchPath = Path.GetFileName(state.SinkOptions.BufferBaseFilename) + "*.json";
+            _candidateSearchPath = Path.GetFileName(state.Options.BufferBaseFilename) + "*.json";
 
             Logger.InfoFormat("Candidate search path is {0}", _candidateSearchPath);
             Logger.InfoFormat("Log folder is {0}", _logFolder);
