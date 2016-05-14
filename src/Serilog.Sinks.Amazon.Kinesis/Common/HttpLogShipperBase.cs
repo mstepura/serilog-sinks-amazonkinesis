@@ -15,6 +15,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
         private readonly ILogReaderFactory _logReaderFactory;
         private readonly IPersistedBookmarkFactory _persistedBookmarkFactory;
+        private readonly ILogShipperFileManager _fileManager;
 
         protected readonly int _batchPostingLimit;
         protected readonly string _bookmarkFilename;
@@ -27,13 +28,15 @@ namespace Serilog.Sinks.Amazon.Kinesis
         protected HttpLogShipperBase(
             KinesisSinkStateBase state,
             ILogReaderFactory logReaderFactory,
-            IPersistedBookmarkFactory persistedBookmarkFactory
+            IPersistedBookmarkFactory persistedBookmarkFactory,
+            ILogShipperFileManager fileManager
             )
         {
             _logger = LogProvider.GetLogger(GetType());
 
             _logReaderFactory = logReaderFactory;
             _persistedBookmarkFactory = persistedBookmarkFactory;
+            _fileManager = fileManager;
 
             _period = state.SinkOptions.Period;
             _throttle = new Throttle(OnTick, _period);
@@ -137,7 +140,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
                 var fileSet = GetFileSet();
 
-                if (currentFilePath == null || !File.Exists(currentFilePath))
+                if (currentFilePath == null || !_fileManager.FileExists(currentFilePath))
                 {
                     currentFilePath = fileSet.FirstOrDefault();
                     Logger.InfoFormat("New log file is {0}", currentFilePath);
@@ -247,11 +250,8 @@ namespace Serilog.Sinks.Amazon.Kinesis
         {
             try
             {
-                using (var stream = new FileStream(fileToDelete, FileMode.Open, FileAccess.ReadWrite,
-                    FileShare.None, 128, FileOptions.DeleteOnClose))
-                {
-                    Logger.InfoFormat("Opened {0} in exclusive mode, deleting...", fileToDelete);
-                }
+                _fileManager.LockAndDeleteFile(fileToDelete);
+                Logger.InfoFormat("Opened {0} in exclusive mode, deleting...", fileToDelete);
                 return true;
             }
             catch (Exception ex)
@@ -265,10 +265,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
         {
             try
             {
-                using (var fileStream = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                {
-                    return fileStream.Length <= nextLineBeginsAtOffset;
-                }
+                return _fileManager.GetFileLengthExclusiveAccess(file) <= nextLineBeginsAtOffset;
             }
             catch (IOException ex)
             {
@@ -284,7 +281,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
         private string[] GetFileSet()
         {
-            var fileSet = Directory.GetFiles(_logFolder, _candidateSearchPath)
+            var fileSet = _fileManager.GetFiles(_logFolder, _candidateSearchPath)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 

@@ -67,10 +67,12 @@
     <Compile Include="Common\CustomJsonFormatter.cs" />
     <Compile Include="Common\ILogReader.cs" />
     <Compile Include="Common\ILogReaderFactory.cs" />
+    <Compile Include="Common\ILogShipperFileManager.cs" />
     <Compile Include="Common\IPersistedBookmark.cs" />
     <Compile Include="Common\IPersistedBookmarkFactory.cs" />
     <Compile Include="Common\LogReader.cs" />
     <Compile Include="Common\LogReaderFactory.cs" />
+    <Compile Include="Common\LogShipperFileManager.cs" />
     <Compile Include="Common\PersistedBookmark.cs" />
     <Compile Include="Common\PersistedBookmarkFactory.cs" />
     <Compile Include="Firehose\KinesisFirehoseLoggerConfigurationExtensions.cs" />

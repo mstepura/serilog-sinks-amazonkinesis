@@ -27,7 +27,8 @@ namespace Serilog.Sinks.Amazon.Kinesis.Firehose.Sinks
 
         public HttpLogShipper(KinesisSinkState state) : base(state,
             new LogReaderFactory(),
-            new PersistedBookmarkFactory()
+            new PersistedBookmarkFactory(),
+            new LogShipperFileManager()
             )
         {
             _kinesisFirehoseClient = state.KinesisFirehoseClient;
