@@ -24,6 +24,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
     {
         readonly HttpLogShipper _shipper;
         readonly RollingFileSink _sink;
+        EventHandler<LogSendErrorEventArgs> _logSendErrorHandler;
 
         public DurableKinesisSink(KinesisStreamSinkOptions options, IAmazonKinesis kinesisClient)
         {
@@ -42,9 +43,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
 
             _shipper = new HttpLogShipper(state);
 
-            if (options.OnLogSendError != null)
+            _logSendErrorHandler = options.OnLogSendError;
+            if (_logSendErrorHandler != null)
             {
-                _shipper.LogSendError += options.OnLogSendError;
+                _shipper.LogSendError += _logSendErrorHandler;
             }
         }
 
@@ -52,6 +54,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
         {
             _sink.Dispose();
             _shipper.Dispose();
+
+            if (_logSendErrorHandler != null)
+            {
+                _shipper.LogSendError -= _logSendErrorHandler;
+                _logSendErrorHandler = null;
+            }
         }
 
         public void Emit(LogEvent logEvent)
