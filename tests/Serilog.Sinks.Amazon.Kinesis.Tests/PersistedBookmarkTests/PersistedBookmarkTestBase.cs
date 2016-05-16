@@ -13,13 +13,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.PersistedBookmarkTests
         protected string FileName { get; private set; }
         protected long Position { get; private set; }
 
-        [SetUp]
-        public void SetUp()
-        {
-            Given();
-            When();
-        }
-
         [TearDown]
         public void TearDown()
         {
@@ -32,9 +25,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.PersistedBookmarkTests
                 File.Delete(BookmarkFileName);
             }
         }
-
-        protected virtual void When() { }
-        protected virtual void Given() { }
 
         protected void GivenFileDoesNotExist()
         {
