@@ -35,3 +35,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("1.0.0.0")]
 
 [assembly: InternalsVisibleTo("Serilog.Sinks.Amazon.Kinesis.Tests")]
+[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")] // Moq madness
