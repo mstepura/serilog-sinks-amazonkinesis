@@ -23,7 +23,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
         protected readonly string _streamName;
 
         protected HttpLogShipperBase(
-            KinesisSinkOptionsBase options,
+            ILogShipperOptions options,
             ILogReaderFactory logReaderFactory,
             IPersistedBookmarkFactory persistedBookmarkFactory,
             ILogShipperFileManager fileManager
@@ -78,7 +78,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        protected void ShipLogs()
+        protected internal void ShipLogs()
         {
             try
             {

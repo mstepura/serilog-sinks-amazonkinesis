@@ -68,6 +68,7 @@
     <Compile Include="Common\ILogReader.cs" />
     <Compile Include="Common\ILogReaderFactory.cs" />
     <Compile Include="Common\ILogShipperFileManager.cs" />
+    <Compile Include="Common\ILogShipperOptions.cs" />
     <Compile Include="Common\IPersistedBookmark.cs" />
     <Compile Include="Common\IPersistedBookmarkFactory.cs" />
     <Compile Include="Common\LogReader.cs" />
