@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Amazon.Kinesis;
-
 namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
 {
     /// <summary>
@@ -25,7 +23,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Stream.Sinks
         ///     Configures the Amazon Kinesis sink.
         /// </summary>
         /// <param name="streamName">The name of the Kinesis stream.</param>
-        /// <param name="shardCount"></param>
         public KinesisStreamSinkOptions(string streamName) : base(streamName)
         {
         }

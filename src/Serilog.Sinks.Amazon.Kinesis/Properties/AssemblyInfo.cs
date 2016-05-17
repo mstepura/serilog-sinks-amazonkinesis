@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyProduct("Serilog.Sinks.Amazon.Kinesis")]
-[assembly: AssemblyCopyright("Copyright © Serilog Contributors 2015")]
+[assembly: AssemblyCopyright("Copyright © Serilog Contributors 2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -35,4 +35,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("1.0.0.0")]
 
 [assembly: InternalsVisibleTo("Serilog.Sinks.Amazon.Kinesis.Tests")]
-[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")] // Moq madness
+[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")] // Required to do AutoFixture magic on internal interfaces
