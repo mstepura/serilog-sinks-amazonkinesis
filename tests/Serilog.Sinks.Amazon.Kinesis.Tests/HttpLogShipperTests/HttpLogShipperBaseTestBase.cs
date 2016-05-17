@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Moq;
 using Moq.Language.Flow;
 using NUnit.Framework;
@@ -25,14 +26,18 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected Mock<ILogShipperFileManager> LogShipperFileManager { get; private set; }
         protected string LogFileNamePrefix { get; private set; }
         protected string LogFolder { get; private set; }
+        protected string[] LogFiles { get; private set; }
+
 
         protected string CurrentLogFileName { get; private set; }
         protected long CurrentLogFilePosition { get; private set; }
-        protected string[] LogFiles { get; private set; }
 
         [SetUp]
         public void SetUp()
         {
+            CurrentLogFileName = null;
+            CurrentLogFilePosition = 0;
+
             _mockRepository = new MockRepository(MockBehavior.Strict);
 
             Fixture = new Fixture().Customize(
@@ -65,10 +70,15 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 .Returns(5);
         }
 
-        protected void GivenLogFilesInDirectory(params string[] files)
+        protected void GivenLogFilesInDirectory(int files = 5)
         {
+            LogFiles = Fixture.CreateMany<string>(files)
+                .Select(x => Path.Combine(LogFolder, LogFileNamePrefix + x + ".json"))
+                .OrderBy(x => x)
+                .ToArray();
+
             SetUpLogShipperFileManagerGetFiles()
-                .Returns(files);
+                .Returns(LogFiles);
         }
 
         protected void GivenFileDeleteSucceeds(string filePath)
@@ -105,6 +115,11 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                     x => x.Create(It.Is<string>(s => s == Options.Object.BufferBaseFilename + ".bookmark"))
                 )
                 .Returns(PersistedBookmark.Object);
+        }
+
+        protected void GivenLogReaderCreateThrows(string fileName, long position)
+        {
+            LogReaderFactory.Setup(x => x.Create(fileName, position)).Throws<IOException>();
         }
 
         protected void WhenLogShipperIsCreated()

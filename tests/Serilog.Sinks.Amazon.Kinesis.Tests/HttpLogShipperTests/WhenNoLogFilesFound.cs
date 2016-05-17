@@ -12,7 +12,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         {
             GivenSinkOptionsAreSet();
             GivenPersistedBookmark();
-            GivenLogFilesInDirectory();
+            GivenLogFilesInDirectory(0);
 
             WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
@@ -26,7 +26,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         {
             GivenSinkOptionsAreSet();
             GivenPersistedBookmark(Path.Combine(Path.GetTempPath(), "fake"), base.Fixture.Create<long>());
-            GivenLogFilesInDirectory();
+            GivenLogFilesInDirectory(0);
 
             WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
