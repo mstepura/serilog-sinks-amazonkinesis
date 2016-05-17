@@ -7,7 +7,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void ThenShipperDoesNotDoAnything()
         {
-            GivenSinkOptionsAreSet();
             GivenPersistedBookmarkIsLocked();
 
             WhenLogShipperIsCalled();

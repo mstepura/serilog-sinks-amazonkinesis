@@ -60,6 +60,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="HttpLogShipperTests\HttpLogShipperBaseTestBase.cs" />
+    <Compile Include="HttpLogShipperTests\LogSendErrorEventTests.cs" />
     <Compile Include="HttpLogShipperTests\LogShipperSUT.cs" />
     <Compile Include="HttpLogShipperTests\WhenBookmarkCannotBeCreated.cs" />
     <Compile Include="HttpLogShipperTests\WhenLogFilesFound.cs" />

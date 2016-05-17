@@ -10,7 +10,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkHasNoData_ThenShipperDoesNotDoAnything()
         {
-            GivenSinkOptionsAreSet();
             GivenPersistedBookmark();
             GivenLogFilesInDirectory(0);
 
@@ -23,7 +22,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkHasData_ThenShipperDoesNotDoAnything()
         {
-            GivenSinkOptionsAreSet();
             GivenPersistedBookmark(Path.Combine(Path.GetTempPath(), "fake"), base.Fixture.Create<long>());
             GivenLogFilesInDirectory(0);
 

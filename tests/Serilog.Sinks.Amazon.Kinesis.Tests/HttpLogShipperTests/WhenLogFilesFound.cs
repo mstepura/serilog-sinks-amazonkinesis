@@ -11,7 +11,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkIsGreaterThanAllFiles_ThenFilesAreDeleted()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles, GivenFileDeleteSucceeds);
 
@@ -26,14 +25,13 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkedLogCannotBeOpened_ThenPreviousFilesAreDeletedButNotLast()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
             GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
-            GivenLogReaderCreateThrows(CurrentLogFileName, CurrentLogFilePosition);
+            GivenLogReaderCreateIOError(CurrentLogFileName, CurrentLogFilePosition);
 
             WhenLogShipperIsCalled();
 
@@ -46,7 +44,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkedLogIsAtTheEnd_ThenPreviousFilesAreDeletedButNotLast()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
@@ -66,7 +63,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndBookmarkedLogIsAtTheEndOfFirstFile_ThenAllNextFilesAreRead()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory(files: 2);
 
             var initialFile = LogFiles[0];
@@ -97,7 +93,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndFailureLockingPreviousFile_ThenProcessingStops()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory(files: 2);
 
             var initialFile = LogFiles[0];
@@ -122,7 +117,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndSendFailure_ThenPositionIsNotUpdated()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory(files: 2);
             var allFiles = LogFiles.ToArray();
             var initialFile = LogFiles[0];
@@ -147,7 +141,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         [Test]
         public void AndLogFileWasTruncated_ThenFileIsReadFromTheBeginning()
         {
-            GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory(1);
             var initialFile = LogFiles[0];
             const int realFileLength = 50;

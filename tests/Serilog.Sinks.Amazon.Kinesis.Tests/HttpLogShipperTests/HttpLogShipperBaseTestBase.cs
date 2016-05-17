@@ -30,6 +30,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected int SentRecords { get; private set; }
         protected int FailedBatches { get; private set; }
         protected int FailedRecords { get; private set; }
+        protected EventHandler<LogSendErrorEventArgs> TargetOnLogSendError { get; private set; }
 
 
         protected string CurrentLogFileName { get; private set; }
@@ -41,14 +42,13 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             CurrentLogFileName = null;
             CurrentLogFilePosition = 0;
 
+            TargetOnLogSendError = DefaultTargetOnLogSendError;
+
             _mockRepository = new MockRepository(MockBehavior.Strict);
 
             Fixture = new Fixture().Customize(
                 new AutoMoqCustomization()
                 );
-
-            Options = _mockRepository.Create<ILogShipperOptions>();
-            Fixture.Inject(Options.Object);
 
             LogReaderFactory = _mockRepository.Create<ILogReaderFactory>();
             Fixture.Inject(LogReaderFactory.Object);
@@ -66,10 +66,15 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             LogShipperDelegator.Setup(x => x.PrepareRecord(It.Is<MemoryStream>(s => s.Length > 0)))
                 .Returns((MemoryStream s) => new string('a', (int)s.Length));
+
+            SetUpSinkOptions();
         }
 
-        protected void GivenSinkOptionsAreSet(int batchPostingLimit = 5)
+        private void SetUpSinkOptions(int batchPostingLimit = 5)
         {
+            Options = _mockRepository.Create<ILogShipperOptions>();
+            Fixture.Inject(Options.Object);
+
             LogFolder = Path.GetDirectoryName(Path.GetTempPath());
             LogFileNamePrefix = Guid.NewGuid().ToString("N");
 
@@ -160,6 +165,13 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 .Throws<IOException>();
         }
 
+        protected void GivenPersistedBookmarkFilePermissionsError()
+        {
+            PersistedBookmarkFactory
+                .Setup(x => x.Create(It.Is<string>(s => s == Options.Object.BufferBaseFilename + ".bookmark")))
+                .Throws<UnauthorizedAccessException>();
+        }
+
         protected void GivenPersistedBookmark(string logFileName = null, long position = 0)
         {
             CurrentLogFileName = logFileName;
@@ -185,7 +197,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 .Returns(PersistedBookmark.Object);
         }
 
-        protected void GivenLogReaderCreateThrows(string fileName, long position)
+        protected void GivenLogReaderCreateIOError(string fileName, long position)
         {
             LogReaderFactory.Setup(x => x.Create(fileName, position)).Throws<IOException>();
         }
@@ -215,6 +227,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 });
         }
 
+        protected void GivenOnLogSendErrorHandler(EventHandler<LogSendErrorEventArgs> handler)
+        {
+            TargetOnLogSendError = handler;
+        }
 
         protected void WhenLogShipperIsCalled()
         {
@@ -224,7 +240,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             Target.ShipIt();
         }
 
-        private void TargetOnLogSendError(object sender, LogSendErrorEventArgs logSendErrorEventArgs)
+        private void DefaultTargetOnLogSendError(object sender, LogSendErrorEventArgs logSendErrorEventArgs)
         {
             throw logSendErrorEventArgs.Exception;
         }
