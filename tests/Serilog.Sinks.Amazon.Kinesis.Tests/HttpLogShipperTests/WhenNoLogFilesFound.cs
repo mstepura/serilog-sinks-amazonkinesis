@@ -14,7 +14,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             GivenPersistedBookmark();
             GivenLogFilesInDirectory(0);
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
             CurrentLogFileName.ShouldBeNull();
@@ -28,7 +27,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             GivenPersistedBookmark(Path.Combine(Path.GetTempPath(), "fake"), base.Fixture.Create<long>());
             GivenLogFilesInDirectory(0);
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
             CurrentLogFileName.ShouldBeNull();

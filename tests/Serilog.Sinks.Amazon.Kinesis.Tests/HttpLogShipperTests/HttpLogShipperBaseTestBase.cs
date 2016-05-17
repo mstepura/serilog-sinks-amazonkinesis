@@ -189,15 +189,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 });
         }
 
-        protected void WhenLogShipperIsCreated()
-        {
-            Target = Fixture.Create<LogShipperSUT>();
-
-            Target.LogSendError += TargetOnLogSendError;
-        }
 
         protected void WhenLogShipperIsCalled()
         {
+            Target = Fixture.Create<LogShipperSUT>();
+            Target.LogSendError += TargetOnLogSendError;
+
             Target.ShipIt();
         }
 

@@ -19,12 +19,9 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             var bookmarkedFile = LogFiles.Max() + "z";
             GivenPersistedBookmark(bookmarkedFile, Fixture.Create<long>());
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
-            Array.ForEach(LogFiles,
-                file => LogShipperFileManager.Verify(x => x.LockAndDeleteFile(file), Times.Once)
-                );
+            LogFiles.ShouldBeEmpty("No one shall remain!");
         }
 
         [Test]
@@ -41,7 +38,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             GivenLogReaderCreateThrows(CurrentLogFileName, CurrentLogFilePosition);
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
             CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
@@ -64,7 +60,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             GivenLogReader(CurrentLogFileName, CurrentLogFilePosition, 0);
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
             CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
@@ -93,7 +88,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             GivenSendIsSuccessful();
 
-            WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
 
             LogFiles.ShouldBe(new[] { otherFile }, "Only one shall remain!");
