@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using Moq;
 using NUnit.Framework;
 using Ploeh.AutoFixture;
 using Shouldly;
@@ -126,7 +125,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory(files: 2);
             var allFiles = LogFiles.ToArray();
-
             var initialFile = LogFiles[0];
 
             GivenPersistedBookmark(initialFile, 0);
@@ -144,6 +142,28 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             SentRecords.ShouldBe(0);
             FailedBatches.ShouldBe(1);
             FailedRecords.ShouldBe(Options.Object.BatchPostingLimit);
+        }
+
+        [Test]
+        public void AndLogFileWasTruncated_ThenFileIsReadFromTheBeginning()
+        {
+            GivenSinkOptionsAreSet();
+            GivenLogFilesInDirectory(1);
+            var initialFile = LogFiles[0];
+            const int realFileLength = 50;
+            const int bookmarkedPosition = 100;
+
+            GivenPersistedBookmark(initialFile, position: bookmarkedPosition);
+            GivenLockedFileLength(initialFile, length: realFileLength);
+            GivenLogReader(initialFile, length: realFileLength, maxStreams: int.MaxValue);
+            GivenSendIsSuccessful();
+
+            WhenLogShipperIsCalled();
+
+            CurrentLogFileName.ShouldBe(initialFile);
+            CurrentLogFilePosition.ShouldBe(realFileLength);
+            SentBatches.ShouldBe((realFileLength + (Options.Object.BatchPostingLimit - 1)) / Options.Object.BatchPostingLimit);
+            SentRecords.ShouldBe(realFileLength);
         }
 
 

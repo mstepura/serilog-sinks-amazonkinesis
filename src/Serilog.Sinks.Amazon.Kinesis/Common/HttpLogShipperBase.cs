@@ -99,7 +99,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             catch (Exception ex)
             {
                 Logger.ErrorException("Error shipping logs", ex);
-                OnLogSendError(new LogSendErrorEventArgs(string.Format("Error in shipping logs to '{0}' stream)", _streamName), ex));
+                OnLogSendError(new LogSendErrorEventArgs(string.Format("Error in shipping logs to '{0}' stream", _streamName), ex));
             }
         }
 

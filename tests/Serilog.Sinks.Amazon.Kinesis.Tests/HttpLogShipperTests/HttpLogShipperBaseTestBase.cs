@@ -156,7 +156,8 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected void GivenPersistedBookmarkIsLocked()
         {
             PersistedBookmarkFactory
-                .Setup(x => x.Create(It.IsAny<string>())).Returns((IPersistedBookmark)null);
+                .Setup(x => x.Create(It.Is<string>(s => s == Options.Object.BufferBaseFilename + ".bookmark")))
+                .Throws<IOException>();
         }
 
         protected void GivenPersistedBookmark(string logFileName = null, long position = 0)
