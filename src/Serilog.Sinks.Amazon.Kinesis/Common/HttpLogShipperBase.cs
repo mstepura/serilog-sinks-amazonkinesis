@@ -9,8 +9,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 {
     abstract class HttpLogShipperBase<TRecord, TResponse>
     {
-        private readonly ILog _logger;
-        protected ILog Logger => _logger;
+        protected ILog Logger { get; }
 
         private readonly ILogReaderFactory _logReaderFactory;
         private readonly IPersistedBookmarkFactory _persistedBookmarkFactory;
@@ -34,7 +33,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             if (persistedBookmarkFactory == null) throw new ArgumentNullException(nameof(persistedBookmarkFactory));
             if (fileManager == null) throw new ArgumentNullException(nameof(fileManager));
 
-            _logger = LogProvider.GetLogger(GetType());
+            Logger = LogProvider.GetLogger(GetType());
 
             _logReaderFactory = logReaderFactory;
             _persistedBookmarkFactory = persistedBookmarkFactory;
@@ -78,7 +77,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
             }
         }
 
-        protected internal void ShipLogs()
+        protected void ShipLogs()
         {
             try
             {
@@ -114,29 +113,44 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
                 var fileSet = GetFileSet();
 
-                if (currentFilePath == null || !_fileManager.FileExists(currentFilePath))
+                if (currentFilePath == null)
                 {
                     currentFilePath = fileSet.FirstOrDefault();
                     Logger.InfoFormat("New log file is {0}", currentFilePath);
-
                     bookmark.UpdateFileNameAndPosition(currentFilePath, 0L);
-
-                    if (currentFilePath == null)
-                    {
-                        Logger.InfoFormat("No log file is found. Nothing to do.");
-                        break;
-                    }
+                }
+                else if (fileSet.All(f => CompareFileNames(f, currentFilePath) != 0))
+                {
+                    currentFilePath = fileSet.FirstOrDefault(f => CompareFileNames(f, currentFilePath) >= 0);
+                    Logger.InfoFormat("New log file is {0}", currentFilePath);
+                    bookmark.UpdateFileNameAndPosition(currentFilePath, 0L);
                 }
 
                 // delete all previous files - we will not read them anyway
-                foreach (var fileToDelete in fileSet.TakeWhile(f => !FileNamesEqual(f, currentFilePath)))
+                if (currentFilePath == null)
                 {
-                    TryDeleteFile(fileToDelete);
+                    foreach (var fileToDelete in fileSet)
+                    {
+                        TryDeleteFile(fileToDelete);
+                    }
+                }
+                else
+                {
+                    foreach (var fileToDelete in fileSet.TakeWhile(f => CompareFileNames(f, currentFilePath) < 0))
+                    {
+                        TryDeleteFile(fileToDelete);
+                    }
+                }
+
+                if (currentFilePath == null)
+                {
+                    Logger.InfoFormat("No log file is found. Nothing to do.");
+                    break;
                 }
 
                 // now we are interested in current file and all after it.
                 fileSet =
-                    fileSet.SkipWhile(f => !FileNamesEqual(f, currentFilePath))
+                    fileSet.SkipWhile(f => CompareFileNames(f, currentFilePath) <= 0)
                         .ToArray();
 
                 var initialPosition = bookmark.Position;
@@ -263,9 +277,9 @@ namespace Serilog.Sinks.Amazon.Kinesis
             return fileSet;
         }
 
-        private static bool FileNamesEqual(string fileName1, string fileName2)
+        private static int CompareFileNames(string fileName1, string fileName2)
         {
-            return string.Equals(fileName1, fileName2, StringComparison.OrdinalIgnoreCase);
+            return string.Compare(fileName1, fileName2, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using Moq;
 using Moq.Language.Flow;
@@ -14,7 +15,8 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
     {
         private MockRepository _mockRepository;
         protected IFixture Fixture { get; private set; }
-        protected HttpLogShipperBase<string, string> Target { get; private set; }
+        protected LogShipperSUT Target { get; private set; }
+
         protected Mock<ILogShipperOptions> Options { get; private set; }
         protected Mock<ILogReaderFactory> LogReaderFactory { get; private set; }
         protected Mock<ILogReader> LogReader { get; private set; }
@@ -63,19 +65,15 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 .Returns(5);
         }
 
-        protected void GivenNoLogFilesInDirectory()
+        protected void GivenLogFilesInDirectory(params string[] files)
         {
             SetUpLogShipperFileManagerGetFiles()
-                .Returns(new string[0]);
+                .Returns(files);
         }
 
-        protected void GivenFileDoesNotExist(string filePath)
+        protected void GivenFileDeleteSucceeds(string filePath)
         {
-            LogShipperFileManager.Setup(x => x.FileExists(filePath)).Returns(false);
-        }
-        protected void GivenFileExists(string filePath)
-        {
-            LogShipperFileManager.Setup(x => x.FileExists(filePath)).Returns(true);
+            LogShipperFileManager.Setup(x => x.LockAndDeleteFile(filePath));
         }
 
         protected void GivenPersistedBookmarkIsLocked()
@@ -111,13 +109,15 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
         protected void WhenLogShipperIsCreated()
         {
-            Target = Fixture.Create<HttpLogShipperBase<string, string>>();
+            _mockRepository.Create<ILogShipperProtectedDelegator>();
+            Target = Fixture.Create<LogShipperSUT>();
+
             Target.LogSendError += TargetOnLogSendError;
         }
 
         protected void WhenLogShipperIsCalled()
         {
-            Target.ShipLogs();
+            Target.ShipIt();
         }
 
         private void TargetOnLogSendError(object sender, LogSendErrorEventArgs logSendErrorEventArgs)

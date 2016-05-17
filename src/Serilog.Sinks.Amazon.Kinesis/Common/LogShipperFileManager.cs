@@ -4,11 +4,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
 {
     class LogShipperFileManager : ILogShipperFileManager
     {
-        public bool FileExists(string filePath)
-        {
-            return File.Exists(filePath);
-        }
-
         public long GetFileLengthExclusiveAccess(string filePath)
         {
             using (var fileStream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))

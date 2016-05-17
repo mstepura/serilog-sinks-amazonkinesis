@@ -5,24 +5,14 @@ using Shouldly;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 {
-    class WhenNoFilesToProcess : HttpLogShipperBaseTestBase
+    class WhenNoLogFilesFound : HttpLogShipperBaseTestBase
     {
-        [Test]
-        public void AndBookmarkCannotBeCreated()
-        {
-            GivenSinkOptionsAreSet();
-            GivenPersistedBookmarkIsLocked();
-
-            WhenLogShipperIsCreated();
-            WhenLogShipperIsCalled();
-        }
-
         [Test]
         public void AndBookmarkHasNoData_ThenShipperDoesNotDoAnything()
         {
             GivenSinkOptionsAreSet();
             GivenPersistedBookmark();
-            GivenNoLogFilesInDirectory();
+            GivenLogFilesInDirectory();
 
             WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
@@ -36,8 +26,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         {
             GivenSinkOptionsAreSet();
             GivenPersistedBookmark(Path.Combine(Path.GetTempPath(), "fake"), base.Fixture.Create<long>());
-            GivenFileDoesNotExist(CurrentLogFileName);
-            GivenNoLogFilesInDirectory();
+            GivenLogFilesInDirectory();
 
             WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
