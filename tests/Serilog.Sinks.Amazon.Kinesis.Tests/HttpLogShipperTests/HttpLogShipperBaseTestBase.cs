@@ -1,13 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Moq;
-using Moq.Language.Flow;
 using NUnit.Framework;
 using Ploeh.AutoFixture;
 using Ploeh.AutoFixture.AutoMoq;
 using Serilog.Sinks.Amazon.Kinesis.Common;
+using System.Collections.Generic;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 {
@@ -27,6 +26,8 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected string LogFileNamePrefix { get; private set; }
         protected string LogFolder { get; private set; }
         protected string[] LogFiles { get; private set; }
+        protected int SentBatches { get; private set; }
+        protected int SentRecords { get; private set; }
 
 
         protected string CurrentLogFileName { get; private set; }
@@ -56,11 +57,15 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             LogShipperFileManager = _mockRepository.Create<ILogShipperFileManager>();
             Fixture.Inject(LogShipperFileManager.Object);
 
+            SentBatches = SentRecords = 0;
             LogShipperDelegator = _mockRepository.Create<ILogShipperProtectedDelegator>();
             Fixture.Inject(LogShipperDelegator.Object);
+
+            LogShipperDelegator.Setup(x => x.PrepareRecord(It.Is<MemoryStream>(s => s.Length > 0)))
+                .Returns((MemoryStream s) => new string('a', (int)s.Length));
         }
 
-        protected void GivenSinkOptionsAreSet()
+        protected void GivenSinkOptionsAreSet(int batchPostingLimit = 5)
         {
             LogFolder = Path.GetDirectoryName(Path.GetTempPath());
             LogFileNamePrefix = Guid.NewGuid().ToString("N");
@@ -70,7 +75,19 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             Options.SetupGet(x => x.StreamName)
                 .Returns(Fixture.Create<string>());
             Options.SetupGet(x => x.BatchPostingLimit)
-                .Returns(5);
+                .Returns(batchPostingLimit);
+        }
+
+        protected void GivenSendIsSuccessful()
+        {
+            var success = true;
+            LogShipperDelegator.Setup(x => x.SendRecords(It.Is<List<string>>(s => s.Count > 0 && s.Count <= Options.Object.BatchPostingLimit), out success))
+                .Returns(Fixture.Create<string>())
+                .Callback((List<string> batch, bool b) =>
+                {
+                    SentBatches++;
+                    SentRecords += batch.Count;
+                });
         }
 
         protected void GivenLogFilesInDirectory(int files = 5)
@@ -80,13 +97,35 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
                 .OrderBy(x => x)
                 .ToArray();
 
-            SetUpLogShipperFileManagerGetFiles()
-                .Returns(LogFiles);
+            LogShipperFileManager
+                .Setup(x => x.GetFiles(
+                    It.Is<string>(s => s == LogFolder),
+                    It.Is<string>(s => s == LogFileNamePrefix + "*.json")
+                    )
+                )
+                .Returns(() => LogFiles);
         }
 
         protected void GivenFileDeleteSucceeds(string filePath)
         {
-            LogShipperFileManager.Setup(x => x.LockAndDeleteFile(filePath));
+            LogShipperFileManager.Setup(x => x.LockAndDeleteFile(filePath)).Callback((string file) =>
+            {
+                LogFiles = LogFiles.Where(x => !string.Equals(x, file, StringComparison.OrdinalIgnoreCase)).ToArray();
+            });
+        }
+
+        protected void GivenFileCannotBeLocked(string logFileName)
+        {
+            LogShipperFileManager
+                .Setup(x => x.GetFileLengthExclusiveAccess(logFileName))
+                .Throws<IOException>();
+        }
+
+        protected void GivenLockedFileLength(string logFileName, long length)
+        {
+            LogShipperFileManager
+                .Setup(x => x.GetFileLengthExclusiveAccess(logFileName))
+                .Returns(length);
         }
 
         protected void GivenPersistedBookmarkIsLocked()
@@ -101,7 +140,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             CurrentLogFilePosition = position;
 
             PersistedBookmark = _mockRepository.Create<IPersistedBookmark>();
-            PersistedBookmark.Setup(x => x.Dispose());
+            PersistedBookmark.Setup(x => x.Dispose()).Callback(() => PersistedBookmark.Reset());
             PersistedBookmark.SetupGet(x => x.FileName).Returns(() => CurrentLogFileName);
             PersistedBookmark.SetupGet(x => x.Position).Returns(() => CurrentLogFilePosition);
             PersistedBookmark.Setup(x => x.UpdatePosition(It.IsAny<long>()))
@@ -125,9 +164,9 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             LogReaderFactory.Setup(x => x.Create(fileName, position)).Throws<IOException>();
         }
 
-        protected void GivenLogReader(long length, int maxStreams)
+        protected void GivenLogReader(string logFileName, long length, int maxStreams)
         {
-            LogReaderFactory.Setup(x => x.Create(CurrentLogFileName, CurrentLogFilePosition))
+            LogReaderFactory.Setup(x => x.Create(logFileName, It.IsInRange(0L, Math.Max(CurrentLogFilePosition, length), Range.Inclusive)))
                 .Returns((string fileName, long position) =>
                 {
                     var internalPosition = position > length ? length : position;
@@ -165,16 +204,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         private void TargetOnLogSendError(object sender, LogSendErrorEventArgs logSendErrorEventArgs)
         {
             throw logSendErrorEventArgs.Exception;
-        }
-
-        private ISetup<ILogShipperFileManager, string[]> SetUpLogShipperFileManagerGetFiles()
-        {
-            return LogShipperFileManager
-                .Setup(x => x.GetFiles(
-                    It.Is<string>(s => s == LogFolder),
-                    It.Is<string>(s => s == LogFileNamePrefix + "*.json")
-                    )
-                );
         }
     }
 }

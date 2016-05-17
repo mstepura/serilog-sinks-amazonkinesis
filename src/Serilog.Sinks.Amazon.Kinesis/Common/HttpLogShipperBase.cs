@@ -150,7 +150,7 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
                 // now we are interested in current file and all after it.
                 fileSet =
-                    fileSet.SkipWhile(f => CompareFileNames(f, currentFilePath) <= 0)
+                    fileSet.SkipWhile(f => CompareFileNames(f, currentFilePath) < 0)
                         .ToArray();
 
                 var initialPosition = bookmark.Position;
@@ -201,6 +201,10 @@ namespace Serilog.Sinks.Amazon.Kinesis
                         {
                             Logger.TraceFormat("Advancing bookmark from '{0}' to '{1}'", currentFilePath, fileSet[1]);
                             bookmark.UpdateFileNameAndPosition(fileSet[1], 0);
+                        }
+                        else
+                        {
+                            break;
                         }
                     }
                     else

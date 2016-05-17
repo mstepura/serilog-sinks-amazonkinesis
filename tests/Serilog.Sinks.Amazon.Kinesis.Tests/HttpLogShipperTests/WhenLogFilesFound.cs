@@ -33,8 +33,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
 
-            var filesToDelete = LogFiles.Take(LogFiles.Length - 1).ToArray();
-            Array.ForEach(filesToDelete, GivenFileDeleteSucceeds);
+            Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
@@ -48,10 +47,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
             CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
 
-            LogShipperFileManager.Verify(x => x.LockAndDeleteFile(bookmarkedFile), Times.Never);
-            Array.ForEach(filesToDelete,
-                file => LogShipperFileManager.Verify(x => x.LockAndDeleteFile(file), Times.Once)
-                );
+            LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!");
         }
 
         [Test]
@@ -60,14 +56,13 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
 
-            var filesToDelete = LogFiles.Take(LogFiles.Length - 1).ToArray();
-            Array.ForEach(filesToDelete, GivenFileDeleteSucceeds);
+            Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
             GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
 
-            GivenLogReader(CurrentLogFilePosition, 0);
+            GivenLogReader(CurrentLogFileName, CurrentLogFilePosition, 0);
 
             WhenLogShipperIsCreated();
             WhenLogShipperIsCalled();
@@ -75,10 +70,39 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
             CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
 
-            LogShipperFileManager.Verify(x => x.LockAndDeleteFile(bookmarkedFile), Times.Never);
-            Array.ForEach(filesToDelete,
-                file => LogShipperFileManager.Verify(x => x.LockAndDeleteFile(file), Times.Once)
-                );
+            LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!");
+        }
+
+        [Test]
+        public void AndBookmarkedLogIsAtTheEndOfFirstFile_ThenAllNextFilesAreRead()
+        {
+            GivenSinkOptionsAreSet();
+            GivenLogFilesInDirectory(files: 2);
+
+            var initialFile = LogFiles[0];
+            var otherFile = LogFiles[1];
+
+            GivenFileDeleteSucceeds(initialFile);
+            GivenPersistedBookmark(initialFile, Fixture.Create<long>());
+
+            GivenLockedFileLength(initialFile, length: CurrentLogFilePosition);
+            GivenLockedFileLength(otherFile, length: Options.Object.BatchPostingLimit * 2);
+
+            GivenLogReader(initialFile, length: CurrentLogFilePosition, maxStreams: 0);
+            GivenLogReader(otherFile, length: Options.Object.BatchPostingLimit * 2, maxStreams: int.MaxValue);
+
+            GivenSendIsSuccessful();
+
+            WhenLogShipperIsCreated();
+            WhenLogShipperIsCalled();
+
+            LogFiles.ShouldBe(new[] { otherFile }, "Only one shall remain!");
+
+            CurrentLogFileName.ShouldBe(otherFile);
+            CurrentLogFilePosition.ShouldBe(Options.Object.BatchPostingLimit * 2);
+
+            SentBatches.ShouldBe(2);
+            SentRecords.ShouldBe(Options.Object.BatchPostingLimit * 2);
         }
     }
 }
