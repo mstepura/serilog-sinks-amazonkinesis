@@ -48,11 +48,37 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
             CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
 
+            LogShipperFileManager.Verify(x => x.LockAndDeleteFile(bookmarkedFile), Times.Never);
             Array.ForEach(filesToDelete,
                 file => LogShipperFileManager.Verify(x => x.LockAndDeleteFile(file), Times.Once)
                 );
-            LogShipperFileManager.Verify(x => x.LockAndDeleteFile(bookmarkedFile), Times.Never);
+        }
 
+        [Test]
+        public void AndBookmarkedLogIsAtTheEnd_ThenPreviousFilesAreDeletedButNotLast()
+        {
+            GivenSinkOptionsAreSet();
+            GivenLogFilesInDirectory();
+
+            var filesToDelete = LogFiles.Take(LogFiles.Length - 1).ToArray();
+            Array.ForEach(filesToDelete, GivenFileDeleteSucceeds);
+
+            var bookmarkedFile = LogFiles.Last();
+            var bookmarkedPosition = Fixture.Create<long>();
+            GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
+
+            GivenLogReader(CurrentLogFilePosition, 0);
+
+            WhenLogShipperIsCreated();
+            WhenLogShipperIsCalled();
+
+            CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
+            CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
+
+            LogShipperFileManager.Verify(x => x.LockAndDeleteFile(bookmarkedFile), Times.Never);
+            Array.ForEach(filesToDelete,
+                file => LogShipperFileManager.Verify(x => x.LockAndDeleteFile(file), Times.Once)
+                );
         }
     }
 }

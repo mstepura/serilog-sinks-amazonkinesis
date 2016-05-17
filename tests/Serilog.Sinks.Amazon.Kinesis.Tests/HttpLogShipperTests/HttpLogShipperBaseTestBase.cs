@@ -20,10 +20,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
         protected Mock<ILogShipperOptions> Options { get; private set; }
         protected Mock<ILogReaderFactory> LogReaderFactory { get; private set; }
-        protected Mock<ILogReader> LogReader { get; private set; }
         protected Mock<IPersistedBookmarkFactory> PersistedBookmarkFactory { get; private set; }
         protected Mock<IPersistedBookmark> PersistedBookmark { get; private set; }
         protected Mock<ILogShipperFileManager> LogShipperFileManager { get; private set; }
+        protected Mock<ILogShipperProtectedDelegator> LogShipperDelegator { get; private set; }
         protected string LogFileNamePrefix { get; private set; }
         protected string LogFolder { get; private set; }
         protected string[] LogFiles { get; private set; }
@@ -55,6 +55,9 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             LogShipperFileManager = _mockRepository.Create<ILogShipperFileManager>();
             Fixture.Inject(LogShipperFileManager.Object);
+
+            LogShipperDelegator = _mockRepository.Create<ILogShipperProtectedDelegator>();
+            Fixture.Inject(LogShipperDelegator.Object);
         }
 
         protected void GivenSinkOptionsAreSet()
@@ -122,9 +125,33 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             LogReaderFactory.Setup(x => x.Create(fileName, position)).Throws<IOException>();
         }
 
+        protected void GivenLogReader(long length, int maxStreams)
+        {
+            LogReaderFactory.Setup(x => x.Create(CurrentLogFileName, CurrentLogFilePosition))
+                .Returns((string fileName, long position) =>
+                {
+                    var internalPosition = position > length ? length : position;
+                    var streamsLeft = maxStreams;
+                    var reader = _mockRepository.Create<ILogReader>();
+                    reader.SetupGet(x => x.Position).Returns(() => internalPosition);
+                    reader.Setup(x => x.ReadLine()).Returns(() =>
+                    {
+                        internalPosition++;
+                        streamsLeft--;
+                        if (internalPosition > length || streamsLeft < 0)
+                        {
+                            internalPosition = length;
+                            return new MemoryStream();
+                        }
+                        return new MemoryStream(new byte[1]);
+                    });
+                    reader.Setup(x => x.Dispose()).Callback(() => { reader.Reset(); });
+                    return reader.Object;
+                });
+        }
+
         protected void WhenLogShipperIsCreated()
         {
-            _mockRepository.Create<ILogShipperProtectedDelegator>();
             Target = Fixture.Create<LogShipperSUT>();
 
             Target.LogSendError += TargetOnLogSendError;

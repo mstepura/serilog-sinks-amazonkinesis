@@ -239,12 +239,12 @@ namespace Serilog.Sinks.Amazon.Kinesis
             try
             {
                 _fileManager.LockAndDeleteFile(fileToDelete);
-                Logger.InfoFormat("Opened {0} in exclusive mode, deleting...", fileToDelete);
+                Logger.InfoFormat("Log file deleted: {0}", fileToDelete);
                 return true;
             }
             catch (Exception ex)
             {
-                Logger.WarnException("Exception opening {0} in exclusive mode", ex, fileToDelete);
+                Logger.WarnException("Exception deleting file: {0}", ex, fileToDelete);
                 return false;
             }
         }
