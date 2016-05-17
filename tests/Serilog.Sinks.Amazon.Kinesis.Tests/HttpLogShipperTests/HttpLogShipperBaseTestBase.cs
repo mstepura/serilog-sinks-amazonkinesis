@@ -28,6 +28,8 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected string[] LogFiles { get; private set; }
         protected int SentBatches { get; private set; }
         protected int SentRecords { get; private set; }
+        protected int FailedBatches { get; private set; }
+        protected int FailedRecords { get; private set; }
 
 
         protected string CurrentLogFileName { get; private set; }
@@ -58,6 +60,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             Fixture.Inject(LogShipperFileManager.Object);
 
             SentBatches = SentRecords = 0;
+            FailedBatches = FailedRecords = 0;
             LogShipperDelegator = _mockRepository.Create<ILogShipperProtectedDelegator>();
             Fixture.Inject(LogShipperDelegator.Object);
 
@@ -81,13 +84,35 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         protected void GivenSendIsSuccessful()
         {
             var success = true;
-            LogShipperDelegator.Setup(x => x.SendRecords(It.Is<List<string>>(s => s.Count > 0 && s.Count <= Options.Object.BatchPostingLimit), out success))
+            LogShipperDelegator.Setup(
+                x => x.SendRecords(It.Is<List<string>>(s => s.Count > 0 && s.Count <= Options.Object.BatchPostingLimit), out success)
+                )
                 .Returns(Fixture.Create<string>())
                 .Callback((List<string> batch, bool b) =>
                 {
                     SentBatches++;
                     SentRecords += batch.Count;
                 });
+        }
+
+        protected void GivenSendIsFailed()
+        {
+            var success = false;
+            var response = Fixture.Create<string>();
+            LogShipperDelegator.Setup(
+                x => x.SendRecords(It.Is<List<string>>(s => s.Count > 0 && s.Count <= Options.Object.BatchPostingLimit), out success)
+                )
+                .Returns(response);
+
+            LogShipperDelegator.Setup(
+                x => x.HandleError(response, It.IsAny<int>())
+                )
+                .Callback((string resp, int recs) =>
+                {
+                    FailedBatches++;
+                    FailedRecords += recs;
+                });
+
         }
 
         protected void GivenLogFilesInDirectory(int files = 5)

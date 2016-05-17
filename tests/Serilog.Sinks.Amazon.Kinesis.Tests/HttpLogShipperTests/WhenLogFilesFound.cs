@@ -29,13 +29,11 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         {
             GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
-
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
             GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
-
             GivenLogReaderCreateThrows(CurrentLogFileName, CurrentLogFilePosition);
 
             WhenLogShipperIsCalled();
@@ -51,13 +49,11 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         {
             GivenSinkOptionsAreSet();
             GivenLogFilesInDirectory();
-
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
 
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
             GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
-
             GivenLogReader(CurrentLogFileName, CurrentLogFilePosition, 0);
 
             WhenLogShipperIsCalled();
@@ -98,5 +94,58 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             SentBatches.ShouldBe(2);
             SentRecords.ShouldBe(Options.Object.BatchPostingLimit * 2);
         }
+
+        [Test]
+        public void AndFailureLockingPreviousFile_ThenProcessingStops()
+        {
+            GivenSinkOptionsAreSet();
+            GivenLogFilesInDirectory(files: 2);
+
+            var initialFile = LogFiles[0];
+            var initialPosition = Fixture.Create<long>();
+            var otherFile = LogFiles[1];
+
+            GivenPersistedBookmark(initialFile, initialPosition);
+            GivenFileCannotBeLocked(initialFile);
+            GivenLogReader(initialFile, length: initialPosition, maxStreams: 0);
+
+            WhenLogShipperIsCalled();
+
+            LogFiles.ShouldBe(new[] { initialFile, otherFile }, "No files should be removed.");
+
+            CurrentLogFileName.ShouldBe(initialFile);
+            CurrentLogFilePosition.ShouldBe(initialPosition);
+
+            SentBatches.ShouldBe(0);
+            SentRecords.ShouldBe(0);
+        }
+
+        [Test]
+        public void AndSendFailure_ThenPositionIsNotUpdated()
+        {
+            GivenSinkOptionsAreSet();
+            GivenLogFilesInDirectory(files: 2);
+            var allFiles = LogFiles.ToArray();
+
+            var initialFile = LogFiles[0];
+
+            GivenPersistedBookmark(initialFile, 0);
+            GivenLogReader(initialFile, length: Options.Object.BatchPostingLimit, maxStreams: Options.Object.BatchPostingLimit);
+            GivenSendIsFailed();
+
+            WhenLogShipperIsCalled();
+
+            LogFiles.ShouldBe(allFiles, "Nothing shall be deleted.");
+
+            CurrentLogFileName.ShouldBe(initialFile);
+            CurrentLogFilePosition.ShouldBe(0);
+
+            SentBatches.ShouldBe(0);
+            SentRecords.ShouldBe(0);
+            FailedBatches.ShouldBe(1);
+            FailedRecords.ShouldBe(Options.Object.BatchPostingLimit);
+        }
+
+
     }
 }

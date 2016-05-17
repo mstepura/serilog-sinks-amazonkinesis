@@ -166,8 +166,9 @@ namespace Serilog.Sinks.Amazon.Kinesis
 
                         if (!successful)
                         {
+                            Logger.ErrorFormat("SendRecords failed for {0} records.", records.Count);
                             HandleError(response, records.Count);
-                            break;
+                            return;
                         }
                     }
 
