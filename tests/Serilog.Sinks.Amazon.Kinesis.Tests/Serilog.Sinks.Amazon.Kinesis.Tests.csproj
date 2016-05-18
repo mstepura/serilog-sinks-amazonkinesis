@@ -34,6 +34,10 @@
       <HintPath>..\..\packages\AWSSDK.Core.3.1.5.3\lib\net35\AWSSDK.Core.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="AWSSDK.Kinesis, Version=3.1.0.0, Culture=neutral, PublicKeyToken=885c28607f98e604, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\AWSSDK.Kinesis.3.1.3.0\lib\net35\AWSSDK.Kinesis.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="AWSSDK.KinesisFirehose, Version=3.1.0.0, Culture=neutral, PublicKeyToken=885c28607f98e604, processorArchitecture=MSIL">
       <HintPath>..\..\packages\AWSSDK.KinesisFirehose.3.1.0.2\lib\net35\AWSSDK.KinesisFirehose.dll</HintPath>
       <Private>True</Private>
@@ -81,6 +85,10 @@
     <Compile Include="HttpLogShipperTests\WhenBookmarkCannotBeCreated.cs" />
     <Compile Include="HttpLogShipperTests\WhenLogFilesFound.cs" />
     <Compile Include="HttpLogShipperTests\WhenNoLogFilesFound.cs" />
+    <Compile Include="Integration\DurableKinesisFirehoseSinkTests\DurableKinesisFirehoseSinkTestBase.cs" />
+    <Compile Include="Integration\DurableKinesisFirehoseSinkTests\WhenLogAndWaitEnough.cs" />
+    <Compile Include="Integration\DurableKinesisSinkTests\DurableKinesisSinkTestBase.cs" />
+    <Compile Include="Integration\DurableKinesisSinkTests\WhenLogAndWaitEnough.cs" />
     <Compile Include="LogReaderTests\LogReaderTestBase.cs" />
     <Compile Include="LogReaderTests\WhenLogFileExists.cs" />
     <Compile Include="LogReaderTests\WhenNoLogFileExists.cs" />
@@ -93,6 +101,7 @@
     <Compile Include="PersistedBookmarkTests\WhenBookmarkExistsAndContainsGarbage.cs" />
     <Compile Include="PersistedBookmarkTests\WhenNoBookmarkExists.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestFixtureCategory.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Serilog.Sinks.Amazon.Kinesis\Serilog.Sinks.Amazon.Kinesis.csproj">
@@ -102,9 +111,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config" />
+    <None Include="packages.config">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup>
+    <Analyzer Include="..\..\packages\AWSSDK.Kinesis.3.1.3.0\analyzers\dotnet\cs\AWSSDK.Kinesis.CodeAnalysis.dll" />
     <Analyzer Include="..\..\packages\AWSSDK.KinesisFirehose.3.1.0.2\analyzers\dotnet\cs\AWSSDK.KinesisFirehose.CodeAnalysis.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
