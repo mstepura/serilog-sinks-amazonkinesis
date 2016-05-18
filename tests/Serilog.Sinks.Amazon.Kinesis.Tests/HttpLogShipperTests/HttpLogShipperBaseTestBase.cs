@@ -14,27 +14,31 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
     abstract class HttpLogShipperBaseTestBase
     {
         private MockRepository _mockRepository;
-        protected IFixture Fixture { get; private set; }
-        protected LogShipperSUT Target { get; private set; }
 
-        protected Mock<ILogShipperOptions> Options { get; private set; }
-        protected Mock<ILogReaderFactory> LogReaderFactory { get; private set; }
-        protected Mock<IPersistedBookmarkFactory> PersistedBookmarkFactory { get; private set; }
-        protected Mock<IPersistedBookmark> PersistedBookmark { get; private set; }
-        protected Mock<ILogShipperFileManager> LogShipperFileManager { get; private set; }
-        protected Mock<ILogShipperProtectedDelegator> LogShipperDelegator { get; private set; }
+        private LogShipperSUT Target { get; set; }
+
+        private Mock<ILogShipperOptions> Options { get; set; }
+        private Mock<ILogReaderFactory> LogReaderFactory { get; set; }
+        private Mock<IPersistedBookmarkFactory> PersistedBookmarkFactory { get; set; }
+        private Mock<IPersistedBookmark> PersistedBookmark { get; set; }
+        private Mock<ILogShipperFileManager> LogShipperFileManager { get; set; }
+        private Mock<ILogShipperProtectedDelegator> LogShipperDelegator { get; set; }
+        private EventHandler<LogSendErrorEventArgs> TargetOnLogSendError { get; set; }
+
         protected string LogFileNamePrefix { get; private set; }
         protected string LogFolder { get; private set; }
+        protected int BatchPostingLimit { get; private set; }
+
         protected string[] LogFiles { get; private set; }
         protected int SentBatches { get; private set; }
         protected int SentRecords { get; private set; }
         protected int FailedBatches { get; private set; }
         protected int FailedRecords { get; private set; }
-        protected EventHandler<LogSendErrorEventArgs> TargetOnLogSendError { get; private set; }
-
 
         protected string CurrentLogFileName { get; private set; }
         protected long CurrentLogFilePosition { get; private set; }
+
+        protected IFixture Fixture { get; private set; }
 
         [SetUp]
         public void SetUp()
@@ -49,6 +53,11 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             Fixture = new Fixture().Customize(
                 new AutoMoqCustomization()
                 );
+
+            BatchPostingLimit = Fixture.Create<int>();
+            LogFolder = Path.GetDirectoryName(Path.GetTempPath());
+            LogFileNamePrefix = Guid.NewGuid().ToString("N");
+
 
             LogReaderFactory = _mockRepository.Create<ILogReaderFactory>();
             Fixture.Inject(LogReaderFactory.Object);
@@ -70,20 +79,17 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
             SetUpSinkOptions();
         }
 
-        private void SetUpSinkOptions(int batchPostingLimit = 5)
+        private void SetUpSinkOptions()
         {
             Options = _mockRepository.Create<ILogShipperOptions>();
             Fixture.Inject(Options.Object);
-
-            LogFolder = Path.GetDirectoryName(Path.GetTempPath());
-            LogFileNamePrefix = Guid.NewGuid().ToString("N");
 
             Options.SetupGet(x => x.BufferBaseFilename)
                 .Returns(Path.Combine(LogFolder, LogFileNamePrefix));
             Options.SetupGet(x => x.StreamName)
                 .Returns(Fixture.Create<string>());
             Options.SetupGet(x => x.BatchPostingLimit)
-                .Returns(batchPostingLimit);
+                .Returns(BatchPostingLimit);
         }
 
         protected void GivenSendIsSuccessful()

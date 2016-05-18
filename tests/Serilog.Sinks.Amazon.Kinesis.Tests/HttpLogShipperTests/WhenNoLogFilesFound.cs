@@ -1,5 +1,4 @@
-﻿using System.IO;
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using Ploeh.AutoFixture;
 using Shouldly;
 
@@ -8,27 +7,33 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
     class WhenNoLogFilesFound : HttpLogShipperBaseTestBase
     {
         [Test]
-        public void AndBookmarkHasNoData_ThenShipperDoesNotDoAnything()
+        public void AndBookmarkHasNoData()
         {
-            GivenPersistedBookmark();
-            GivenLogFilesInDirectory(0);
+            GivenPersistedBookmark(logFileName: null, position: 0);
+            GivenLogFilesInDirectory(files: 0);
 
             WhenLogShipperIsCalled();
 
-            CurrentLogFileName.ShouldBeNull();
-            CurrentLogFilePosition.ShouldBe(0);
+            this.ShouldSatisfyAllConditions(
+                "Shipper does not progress",
+                () => CurrentLogFileName.ShouldBeNull(),
+                () => CurrentLogFilePosition.ShouldBe(0)
+                );
         }
 
         [Test]
-        public void AndBookmarkHasData_ThenShipperDoesNotDoAnything()
+        public void AndBookmarkHasData()
         {
-            GivenPersistedBookmark(Path.Combine(Path.GetTempPath(), "fake"), base.Fixture.Create<long>());
-            GivenLogFilesInDirectory(0);
+            GivenPersistedBookmark(logFileName: Fixture.Create<string>(), position: Fixture.Create<long>());
+            GivenLogFilesInDirectory(files: 0);
 
             WhenLogShipperIsCalled();
 
-            CurrentLogFileName.ShouldBeNull();
-            CurrentLogFilePosition.ShouldBe(0);
+            this.ShouldSatisfyAllConditions(
+                "Shipper does not progress and resets bookmark data",
+                () => CurrentLogFileName.ShouldBeNull(),
+                () => CurrentLogFilePosition.ShouldBe(0)
+                );
         }
     }
 }

@@ -1,31 +1,32 @@
 ﻿using System.IO;
 using NUnit.Framework;
 using Shouldly;
+using Ploeh.AutoFixture;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogShipperFileManagerTests
 {
-    class GetFileLengthExclusiveAccessTests : FileTestBase
+    class WhenGetFileLengthExclusiveAccess : FileTestBase
     {
         [Test]
-        public void WhenFileDoesNotExist_ThenIOException()
+        public void GivenFileDoesNotExist_ThenIOException()
         {
             Should.Throw<IOException>(
                 () => Target.GetFileLengthExclusiveAccess(FileName)
                 );
         }
 
-        [TestCase(100L)]
-        [TestCase(42L)]
-        public void WhenFileExistsAndNotLocked_ThenCorrectLength(long length)
+        [Test]
+        public void GivenFileExistsAndNotOpened_ThenCorrectLengthIsReturned()
         {
+            var length = Fixture.Create<int>();
             File.WriteAllBytes(FileName, new byte[length]);
             Target.GetFileLengthExclusiveAccess(FileName).ShouldBe(length);
         }
 
         [Test]
-        public void WhenFileExistsAndOpenedForWriting_ThenIOException()
+        public void GivenFileExistsAndIsOpenedForWriting_ThenIOException()
         {
-            File.WriteAllBytes(FileName, new byte[42]);
+            File.WriteAllBytes(FileName, new byte[Fixture.Create<int>()]);
             using (File.Open(FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read))
             {
                 Should.Throw<IOException>(
@@ -34,10 +35,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogShipperFileManagerTests
             }
         }
 
-        [TestCase(100L)]
-        [TestCase(42L)]
-        public void WhenFileExistsAndOpenedForReading_ThenCorrectLength(long length)
+        [Test]
+        public void GivenFileExistsAndOpenedForReading_ThenCorrectLengthIsReturned()
         {
+            var length = Fixture.Create<int>();
             File.WriteAllBytes(FileName, new byte[length]);
             using (File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.Read))
             {

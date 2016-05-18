@@ -6,15 +6,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
 {
     class WhenNoLogFileExists : LogReaderTestBase
     {
-        protected override void Given()
-        {
-            GivenLogFileDoesNotExist();
-            GivenInitialPosition(0);
-        }
-
         [Test]
         public void ThenExceptionIsThrown()
         {
+            GivenLogFileDoesNotExist();
+            GivenInitialPosition(0);
+
             Should.Throw<IOException>(
                 () => WhenLogReaderIsCreated()
                 );

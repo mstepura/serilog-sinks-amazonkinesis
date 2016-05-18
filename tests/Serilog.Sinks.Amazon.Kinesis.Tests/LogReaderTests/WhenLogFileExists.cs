@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Text;
 using NUnit.Framework;
+using Ploeh.AutoFixture;
 using Shouldly;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
@@ -8,7 +9,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
     class WhenLogFileExists : LogReaderTestBase
     {
         [Test]
-        public void NoContent_ThenNothingIsRead()
+        public void WithNoContent_ThenNothingIsRead()
         {
             GivenNoContent();
             GivenUTF8NoBOMEcoding();
@@ -18,24 +19,40 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
             WhenLogReaderIsCreated();
             WhenAllDataIsRead();
 
-            Target.Position.ShouldBe(RawContent.Length);
-            ReadContent.Length.ShouldBe(0);
+            this.ShouldSatisfyAllConditions(
+                () => Target.Position.ShouldBe(0),
+                () => ReadContent.ShouldBeEmpty()
+                );
         }
 
         [Test]
-        public void WithInitialPositionBeyondFileEnd_ThenPositionIsUpdated()
+        public void WithInitialPositionBeyondFileEnd_ThenPositionIsSetToLogLength()
         {
             GivenRandomTextContent("\n");
             GivenUTF8WithBOMEncoding();
             GivenLogFileExistWithContent();
-            GivenInitialPosition(RawContent.Length * 2);
+            GivenInitialPosition(RawContent.Length + Fixture.Create<int>());
 
             WhenLogReaderIsCreated();
-            Target.Position.ShouldBe(RawContent.Length);
 
-            WhenAllDataIsRead();
-            ReadContent.ShouldBeEmpty();
             Target.Position.ShouldBe(RawContent.Length);
+        }
+
+        [Test]
+        public void WithInitialPositionAtFileEnd_ThenNothingIsRead()
+        {
+            GivenRandomTextContent("\n");
+            GivenUTF8WithBOMEncoding();
+            GivenLogFileExistWithContent();
+            GivenInitialPosition(RawContent.Length + Fixture.Create<int>());
+
+            WhenLogReaderIsCreated();
+            WhenAllDataIsRead();
+
+            this.ShouldSatisfyAllConditions(
+                () => Target.Position.ShouldBe(RawContent.Length),
+                () => ReadContent.ShouldBeEmpty()
+                );
         }
 
         [TestCase("\n", 0, 0, 0)]
@@ -83,9 +100,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
             WhenLogReaderIsCreated();
             WhenAllDataIsRead();
 
-            Target.Position.ShouldBe(RawContent.Length);
-            ReadContent.Length.ShouldBe(NormalisedContent.Length);
-            ReadContent.Select(s => Encoding.UTF8.GetString(s.ToArray())).ShouldBe(NormalisedContent);
+            this.ShouldSatisfyAllConditions(
+                () => Target.Position.ShouldBe(RawContent.Length),
+                () => ReadContent.Select(s => Encoding.UTF8.GetString(s.ToArray())).ShouldBe(NormalisedContent)
+                );
         }
 
         [Test]
@@ -100,6 +118,5 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
 
             ReadContent.ShouldNotBeEmpty();
         }
-
     }
 }

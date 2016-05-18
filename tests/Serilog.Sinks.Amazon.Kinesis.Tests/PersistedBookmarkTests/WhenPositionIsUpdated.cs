@@ -7,21 +7,18 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.PersistedBookmarkTests
     class WhenPositionIsUpdated : PersistedBookmarkTestBase
     {
         [Test]
-        public void WhenUpdatedAfterCreating_ThenFileNameAndPositionAreCorrect()
+        public void AfterFileNameAndPositionUpdated_ThenReadSameValue()
         {
             GivenFileDoesNotExist();
             WhenBookmarkIsCreated();
             WhenUpdatedWithFileNameAndPosition();
             WhenUpdatedWithPosition();
 
-            Target.ShouldSatisfyAllConditions(
-                () => Target.Position.ShouldBe(Position),
-                () => Target.FileName.ShouldBe(FileName)
-                );
+            Target.Position.ShouldBe(Position);
         }
 
         [Test]
-        public void WhenUpdatedAfterOpening_ThenFileNameAndPositionAreCorrect()
+        public void AfterOpeningNonEmptyBookmark_ThenReadTheSameValue()
         {
             GivenFileDoesNotExist();
             WhenBookmarkIsCreated();
@@ -31,14 +28,11 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.PersistedBookmarkTests
 
             WhenUpdatedWithPosition();
 
-            Target.ShouldSatisfyAllConditions(
-                () => Target.Position.ShouldBe(Position),
-                () => Target.FileName.ShouldBe(FileName)
-                );
+            Target.Position.ShouldBe(Position);
         }
 
         [Test]
-        public void WhenNoFileNameIsSet_ThenThrowException()
+        public void ForEmptyBookmark_ThenThrowException()
         {
             GivenFileDoesNotExist();
             WhenBookmarkIsCreated();

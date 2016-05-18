@@ -9,12 +9,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
     class WhenLogFilesFound : HttpLogShipperBaseTestBase
     {
         [Test]
-        public void AndBookmarkIsGreaterThanAllFiles_ThenFilesAreDeleted()
+        public void WithBookmarkIsGreaterThanAllFiles_ThenFilesAreDeleted()
         {
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles, GivenFileDeleteSucceeds);
-
             var bookmarkedFile = LogFiles.Max() + "z";
+
             GivenPersistedBookmark(bookmarkedFile, Fixture.Create<long>());
 
             WhenLogShipperIsCalled();
@@ -23,26 +23,27 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
         }
 
         [Test]
-        public void AndBookmarkedLogCannotBeOpened_ThenPreviousFilesAreDeletedButNotLast()
+        public void WithBookmarkedLogCannotBeOpened_ThenPreviousFilesAreDeletedButNotLast()
         {
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
-
             var bookmarkedFile = LogFiles.Last();
             var bookmarkedPosition = Fixture.Create<long>();
+
             GivenPersistedBookmark(bookmarkedFile, bookmarkedPosition);
             GivenLogReaderCreateIOError(CurrentLogFileName, CurrentLogFilePosition);
 
             WhenLogShipperIsCalled();
 
-            CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
-            CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
-
-            LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!");
+            this.ShouldSatisfyAllConditions(
+                () => CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change"),
+                () => CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change"),
+                () => LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!")
+                );
         }
 
         [Test]
-        public void AndBookmarkedLogIsAtTheEnd_ThenPreviousFilesAreDeletedButNotLast()
+        public void WithBookmarkedLogAtTheEnd_ThenPreviousFilesAreDeletedButNotLast()
         {
             GivenLogFilesInDirectory();
             Array.ForEach(LogFiles.Take(LogFiles.Length - 1).ToArray(), GivenFileDeleteSucceeds);
@@ -54,47 +55,48 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             WhenLogShipperIsCalled();
 
-            CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change");
-            CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change");
-
-            LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!");
+            this.ShouldSatisfyAllConditions(
+                () => CurrentLogFileName.ShouldBe(bookmarkedFile, "Bookmarked log file name should not change"),
+                () => CurrentLogFilePosition.ShouldBe(bookmarkedPosition, "Bookmarked position should not change"),
+                () => LogFiles.ShouldBe(new[] { bookmarkedFile }, "Only one shall remain!")
+                );
         }
 
         [Test]
-        public void AndBookmarkedLogIsAtTheEndOfFirstFile_ThenAllNextFilesAreRead()
+        public void WithBookmarkedLogAtTheEndOfFirstFile_ThenAllNextFilesAreRead()
         {
             GivenLogFilesInDirectory(files: 2);
-
             var initialFile = LogFiles[0];
             var otherFile = LogFiles[1];
+            var batchCount = Fixture.Create<int>();
+            var otherFileLength = BatchPostingLimit * batchCount;
 
             GivenFileDeleteSucceeds(initialFile);
             GivenPersistedBookmark(initialFile, Fixture.Create<long>());
 
             GivenLockedFileLength(initialFile, length: CurrentLogFilePosition);
-            GivenLockedFileLength(otherFile, length: Options.Object.BatchPostingLimit * 2);
+            GivenLockedFileLength(otherFile, length: otherFileLength);
 
-            GivenLogReader(initialFile, length: CurrentLogFilePosition, maxStreams: 0);
-            GivenLogReader(otherFile, length: Options.Object.BatchPostingLimit * 2, maxStreams: int.MaxValue);
+            GivenLogReader(initialFile, length: CurrentLogFilePosition, maxStreams: int.MaxValue);
+            GivenLogReader(otherFile, length: otherFileLength, maxStreams: int.MaxValue);
 
             GivenSendIsSuccessful();
 
             WhenLogShipperIsCalled();
 
-            LogFiles.ShouldBe(new[] { otherFile }, "Only one shall remain!");
-
-            CurrentLogFileName.ShouldBe(otherFile);
-            CurrentLogFilePosition.ShouldBe(Options.Object.BatchPostingLimit * 2);
-
-            SentBatches.ShouldBe(2);
-            SentRecords.ShouldBe(Options.Object.BatchPostingLimit * 2);
+            this.ShouldSatisfyAllConditions(
+                () => LogFiles.ShouldBe(new[] { otherFile }, "Only one shall remain!"),
+                () => CurrentLogFileName.ShouldBe(otherFile),
+                () => CurrentLogFilePosition.ShouldBe(otherFileLength),
+                () => SentBatches.ShouldBe(batchCount),
+                () => SentRecords.ShouldBe(otherFileLength)
+                );
         }
 
         [Test]
-        public void AndFailureLockingPreviousFile_ThenProcessingStops()
+        public void WithFailureLockingFileAndGettingLength_ThenProcessingStopsInTheEndOfTheFile()
         {
             GivenLogFilesInDirectory(files: 2);
-
             var initialFile = LogFiles[0];
             var initialPosition = Fixture.Create<long>();
             var otherFile = LogFiles[1];
@@ -105,46 +107,46 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             WhenLogShipperIsCalled();
 
-            LogFiles.ShouldBe(new[] { initialFile, otherFile }, "No files should be removed.");
-
-            CurrentLogFileName.ShouldBe(initialFile);
-            CurrentLogFilePosition.ShouldBe(initialPosition);
-
-            SentBatches.ShouldBe(0);
-            SentRecords.ShouldBe(0);
+            this.ShouldSatisfyAllConditions(
+                () => LogFiles.ShouldBe(new[] { initialFile, otherFile }, "No files should be removed."),
+                () => CurrentLogFileName.ShouldBe(initialFile),
+                () => CurrentLogFilePosition.ShouldBe(initialPosition)
+                );
         }
 
         [Test]
-        public void AndSendFailure_ThenPositionIsNotUpdated()
+        public void WithSendFailure_ThenBookmarkIsNotChanged()
         {
             GivenLogFilesInDirectory(files: 2);
             var allFiles = LogFiles.ToArray();
             var initialFile = LogFiles[0];
 
             GivenPersistedBookmark(initialFile, 0);
-            GivenLogReader(initialFile, length: Options.Object.BatchPostingLimit, maxStreams: Options.Object.BatchPostingLimit);
+            GivenLogReader(initialFile, length: BatchPostingLimit, maxStreams: BatchPostingLimit);
             GivenSendIsFailed();
 
             WhenLogShipperIsCalled();
 
             LogFiles.ShouldBe(allFiles, "Nothing shall be deleted.");
 
-            CurrentLogFileName.ShouldBe(initialFile);
-            CurrentLogFilePosition.ShouldBe(0);
-
-            SentBatches.ShouldBe(0);
-            SentRecords.ShouldBe(0);
-            FailedBatches.ShouldBe(1);
-            FailedRecords.ShouldBe(Options.Object.BatchPostingLimit);
+            this.ShouldSatisfyAllConditions(
+                () => CurrentLogFileName.ShouldBe(initialFile),
+                () => CurrentLogFilePosition.ShouldBe(0),
+                () => SentBatches.ShouldBe(0),
+                () => SentRecords.ShouldBe(0),
+                () => FailedBatches.ShouldBe(1),
+                () => FailedRecords.ShouldBe(BatchPostingLimit)
+                );
         }
 
         [Test]
-        public void AndLogFileWasTruncated_ThenFileIsReadFromTheBeginning()
+        public void WhenLogFileSizeIsLessThanBookmarkPosition_ThenFileIsReadFromTheBeginning()
         {
             GivenLogFilesInDirectory(1);
             var initialFile = LogFiles[0];
-            const int realFileLength = 50;
-            const int bookmarkedPosition = 100;
+            var batchesCount = Fixture.Create<int>();
+            var realFileLength = batchesCount * BatchPostingLimit;
+            var bookmarkedPosition = realFileLength + Fixture.Create<int>();
 
             GivenPersistedBookmark(initialFile, position: bookmarkedPosition);
             GivenLockedFileLength(initialFile, length: realFileLength);
@@ -153,12 +155,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             WhenLogShipperIsCalled();
 
-            CurrentLogFileName.ShouldBe(initialFile);
-            CurrentLogFilePosition.ShouldBe(realFileLength);
-            SentBatches.ShouldBe((realFileLength + (Options.Object.BatchPostingLimit - 1)) / Options.Object.BatchPostingLimit);
-            SentRecords.ShouldBe(realFileLength);
+            this.ShouldSatisfyAllConditions(
+                () => CurrentLogFileName.ShouldBe(initialFile),
+                () => CurrentLogFilePosition.ShouldBe(realFileLength),
+                () => SentBatches.ShouldBe(batchesCount),
+                () => SentRecords.ShouldBe(realFileLength)
+                );
         }
-
-
     }
 }

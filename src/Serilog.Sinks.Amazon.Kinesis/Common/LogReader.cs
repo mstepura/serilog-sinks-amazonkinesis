@@ -8,7 +8,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Common
     {
         private readonly System.IO.Stream _logStream;
 
-        internal LogReader(System.IO.Stream logStream)
+        private LogReader(System.IO.Stream logStream)
         {
             _logStream = logStream;
         }

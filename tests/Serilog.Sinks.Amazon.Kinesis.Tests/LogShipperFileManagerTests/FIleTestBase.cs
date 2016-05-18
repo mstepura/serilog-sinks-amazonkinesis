@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using NUnit.Framework;
+using Ploeh.AutoFixture;
 using Serilog.Sinks.Amazon.Kinesis.Common;
 
 namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogShipperFileManagerTests
@@ -10,10 +11,12 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogShipperFileManagerTests
     {
         protected ILogShipperFileManager Target { get; private set; }
         protected string FileName { get; private set; }
+        protected Fixture Fixture { get; private set; }
 
         [TestFixtureSetUp]
         public void TestFixtureSetUp()
         {
+            Fixture = new Fixture();
             Target = new LogShipperFileManager();
         }
 

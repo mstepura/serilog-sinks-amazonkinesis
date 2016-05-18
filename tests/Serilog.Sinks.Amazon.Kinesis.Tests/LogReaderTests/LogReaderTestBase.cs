@@ -13,7 +13,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
     abstract class LogReaderTestBase
     {
         private Random _random = new Random();
-        private Fixture _fixture = new Fixture();
+        protected Fixture Fixture { get; } = new Fixture();
         protected ILogReader Target { get; private set; }
         protected long InitialPosition { get; private set; }
         protected string LogFileName { get; private set; }
@@ -21,13 +21,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
         protected string StringContent { get; private set; }
         protected string[] NormalisedContent { get; private set; }
         protected MemoryStream[] ReadContent { get; private set; }
-
-        [SetUp]
-        public void SetUp()
-        {
-            Given();
-            When();
-        }
 
         [TearDown]
         public void TearDown()
@@ -49,9 +42,6 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
                 ReadContent = null;
             }
         }
-
-        protected virtual void When() { }
-        protected virtual void Given() { }
 
         protected void GivenLogFileDoesNotExist()
         {
@@ -90,7 +80,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
 
         protected void GivenRandomTextContent(string lineBreak, int emptyLinesBetweenLines = 0, int leadingEmptyLines = 0, int trailingEmptyLines = 0)
         {
-            NormalisedContent = _fixture.CreateMany<string>(100).ToArray();
+            NormalisedContent = Fixture.CreateMany<string>(100).ToArray();
 
             var prefix = Enumerable.Range(0, leadingEmptyLines).Select(_ => CreateRandomWhiteSpaceString(0, 5));
             var suffix = Enumerable.Range(0, trailingEmptyLines).Select(_ => CreateRandomWhiteSpaceString(0, 5));
@@ -128,7 +118,7 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.LogReaderTests
 
         protected void GivenRandomBytesContent()
         {
-            RawContent = _fixture.CreateMany<byte>(10000).ToArray();
+            RawContent = Fixture.CreateMany<byte>(10000).ToArray();
         }
 
         protected void GivenLogFileExistWithContent()

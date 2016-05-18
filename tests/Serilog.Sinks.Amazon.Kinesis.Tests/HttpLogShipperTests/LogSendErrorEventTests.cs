@@ -22,8 +22,10 @@ namespace Serilog.Sinks.Amazon.Kinesis.Tests.HttpLogShipperTests
 
             WhenLogShipperIsCalled();
 
-            exception.ShouldNotBeNull();
-            message.ShouldNotBeNullOrWhiteSpace();
+            this.ShouldSatisfyAllConditions(
+                () => exception.ShouldNotBeNull(),
+                () => message.ShouldNotBeNullOrWhiteSpace()
+                );
         }
     }
 }
